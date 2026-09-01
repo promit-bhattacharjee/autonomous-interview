@@ -1,0 +1,48 @@
+# Environment variables & secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments (uv, venv, conda, poetry)
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Packaging & distribution
+build/
+dist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & type checking
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.pytype/
+.ruff_cache/
+
+# IDE & Editor configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs & temporary files
+*.log
+scratch/
+tmp/
