@@ -46,7 +46,7 @@ class InterviewSession:
         """
         Initializes the interview session.
         If direct questions were provided, executes START -> ask_question -> END.
-        Otherwise, executes START -> generate_questions (using OpenRouter DeepSeek V3) -> ask_question -> END.
+        Otherwise, executes START -> generate_questions (using OpenRouter DeepSeek V4 Flash 0731) -> ask_question -> END.
         Returns the formulated first question string for TTS to speak.
         """
         if self.questions:

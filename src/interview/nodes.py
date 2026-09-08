@@ -59,7 +59,7 @@ def _ensure_text_content(msg: AIMessage) -> AIMessage:
 
 def _get_structured_thinking_llm(schema: Any):
     """
-    Returns a structured thinking model using OpenRouter DeepSeek V3,
+    Returns a structured thinking model using OpenRouter DeepSeek V4 Flash 0731,
     with automatic fallback to LLaMA-3.3-70B if upstream OpenRouter providers
     experience temporary rate-limiting.
     """
@@ -72,13 +72,13 @@ def _get_structured_thinking_llm(schema: Any):
 
 
 # ==============================================================================
-# NODE 1: Dynamic Question Generation Node (Powered by OpenRouter DeepSeek V3)
+# NODE 1: Dynamic Question Generation Node (Powered by OpenRouter DeepSeek V4 Flash 0731)
 # ==============================================================================
 
 def generate_questions_node(state: InterviewState) -> dict:
     """
     Generates structured interview topics, questions, and suggested follow-ups
-    using OpenRouter DeepSeek V3. Uses compressed StudentData and UniversityData.
+    using OpenRouter DeepSeek V4 Flash 0731. Uses compressed StudentData and UniversityData.
     """
     expected_time = state.get("expected_total_time_to_ans", 45)
 
@@ -185,7 +185,7 @@ def generate_questions_node(state: InterviewState) -> dict:
         HumanMessage(content=human_content),
     ]
 
-    # Use OpenRouter thinking model (DeepSeek V3 with fallback)
+    # Use OpenRouter thinking model (DeepSeek V4 Flash 0731 with fallback)
     structured_llm = _get_structured_thinking_llm(QuestionListModelState)
     result: QuestionListModelState = structured_llm.invoke(messages)
 
@@ -209,13 +209,13 @@ def generate_questions_node(state: InterviewState) -> dict:
 
 
 # ==============================================================================
-# NODE 2: Per-Turn Answer Evaluation Node (Powered by OpenRouter DeepSeek V3)
+# NODE 2: Per-Turn Answer Evaluation Node (Powered by OpenRouter DeepSeek V4 Flash 0731)
 # ==============================================================================
 
 def evaluate_answer_node(state: InterviewState) -> dict:
     """
     Evaluates candidate's latest response against active relational question and keywords
-    using OpenRouter DeepSeek V3. Appends an EvaluationRecord.
+    using OpenRouter DeepSeek V4 Flash 0731. Appends an EvaluationRecord.
     """
     messages_list = state.get("messages", [])
     last_ai_msg = next((m for m in reversed(messages_list) if isinstance(m, AIMessage)), None)
@@ -243,7 +243,7 @@ def evaluate_answer_node(state: InterviewState) -> dict:
         HumanMessage(content=prompt_content),
     ]
 
-    # OpenRouter thinking model evaluates accuracy (DeepSeek V3 with fallback)
+    # OpenRouter thinking model evaluates accuracy (DeepSeek V4 Flash 0731 with fallback)
     structured_llm = _get_structured_thinking_llm(AnswerAccuracyEvaluation)
     result: AnswerAccuracyEvaluation = structured_llm.invoke(eval_messages)
 
@@ -380,13 +380,13 @@ def process_answer_node(state: InterviewState) -> dict:
 
 
 # ==============================================================================
-# NODE 5: Post-Interview Final Evaluation Node (Powered by OpenRouter DeepSeek V3)
+# NODE 5: Post-Interview Final Evaluation Node (Powered by OpenRouter DeepSeek V4 Flash 0731)
 # ==============================================================================
 
 def generate_final_evaluation_node(state: InterviewState) -> dict:
     """
     Synthesizes the full verbatim interview transcript and per-turn evaluation metrics
-    into a comprehensive final UKVI credibility and academic admissions report using OpenRouter DeepSeek V3.
+    into a comprehensive final UKVI credibility and academic admissions report using OpenRouter DeepSeek V4 Flash 0731.
     """
     messages = state.get("messages", [])
     evaluations = state.get("evaluations", [])
@@ -426,7 +426,7 @@ def generate_final_evaluation_node(state: InterviewState) -> dict:
         HumanMessage(content=human_content),
     ]
 
-    # OpenRouter thinking model generates final report (DeepSeek V3 with fallback)
+    # OpenRouter thinking model generates final report (DeepSeek V4 Flash 0731 with fallback)
     structured_llm = _get_structured_thinking_llm(FinalEvaluation)
     final_report: FinalEvaluation = structured_llm.invoke(eval_messages)
 

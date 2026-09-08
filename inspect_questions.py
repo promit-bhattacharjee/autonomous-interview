@@ -24,7 +24,7 @@ def main():
     print("=" * 80)
     print("\n[+] Initializing InterviewSession...")
     print("[+] Dynamically fetching student & university JSON from mock API...")
-    print("[+] Running OpenRouter DeepSeek V3: START -> generate_questions -> ask_question...")
+    print("[+] Running OpenRouter DeepSeek V4 Flash 0731: START -> generate_questions -> ask_question...")
     print("[+] Please wait while OpenRouter generates adaptive interview questions...\n")
 
     session = InterviewSession()

@@ -78,12 +78,12 @@ def print_final_evaluation_report(final_eval: dict):
 def main():
     print("=" * 75)
     print("   AI UK CREDIBILITY & ACADEMIC INTERVIEWER -- TERMINAL RUNNER   ")
-    print("   (Powered by OpenRouter DeepSeek V3 Brain & Gemini Voice Interface)   ")
+    print("   (Powered by OpenRouter DeepSeek V4 Flash 0731 Brain & Gemini Voice Interface)   ")
     print("=" * 75)
 
     print("\n[+] Initializing InterviewSession...")
     print("[+] Loading student & university data from standardized mock API JSON...")
-    print("[+] Executing OpenRouter DeepSeek V3 for dynamic question & rubric generation...")
+    print("[+] Executing OpenRouter DeepSeek V4 Flash 0731 for dynamic question & rubric generation...")
 
     session = InterviewSession(student_id="UK-CAS-2026-9041", university_id="UK-HERTS-01")
     first_question = session.start()
@@ -121,7 +121,7 @@ def main():
             print("\n[-] Exiting interview session.")
             break
 
-        print("\n[+] OpenRouter DeepSeek V3 evaluating your response...")
+        print("\n[+] OpenRouter DeepSeek V4 Flash 0731 evaluating your response...")
 
         next_text, is_completed, eval_data = session.submit_candidate_answer(candidate_answer)
 
