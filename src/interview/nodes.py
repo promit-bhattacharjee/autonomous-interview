@@ -17,6 +17,11 @@ from interview.state import (
     InterviewState,
     QuestionListModelState,
 )
+from interview.tools.question_helpers import (
+    get_active_turn_target,
+    get_current_followup,
+    is_followup_turn,
+)
 
 
 def extract_initial_text(state: InitialExtracedTextState) -> dict:
@@ -126,7 +131,6 @@ def evaluate_answer_node(state: InterviewState) -> dict:
         }
 
     q = questions[index]
-    q_id = q.question_id
     q_tid = q.topic_id
 
     # Locate topic name
@@ -136,18 +140,8 @@ def evaluate_answer_node(state: InterviewState) -> dict:
             topic_name = t.name
             break
 
-    # Determine keywords and context based on whether this is a follow-up or main question
-    if is_followup:
-        followups = state.get("suggested_followups", [])
-        matching_f = [f for f in followups if f.question_id == q_id]
-        if matching_f:
-            keywords_list = matching_f[0].expected_answer_keywords
-        else:
-            keywords_list = q.expected_answer_keywords
-        context_type = "Follow-up Question"
-    else:
-        keywords_list = q.expected_answer_keywords
-        context_type = "Main Question"
+    # Determine keywords and context via helper
+    question_text, keywords_list, context_type = get_active_turn_target(state)
 
     prompt_content = ANSWER_EVALUATION_HUMAN_PROMPT.format(
         topic_name=topic_name,
@@ -181,7 +175,6 @@ def ask_question_node(state: InterviewState) -> dict:
     """
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
-    is_followup = state.get("is_followup", False)
     is_reask = state.get("is_reask", False)
     unmatched_keywords = state.get("unmatched_keywords", [])
 
@@ -198,7 +191,6 @@ def ask_question_node(state: InterviewState) -> dict:
         }
 
     q = questions[index]
-    q_id = q.question_id
     q_tid = q.topic_id
 
     # Locate topic name
@@ -208,16 +200,9 @@ def ask_question_node(state: InterviewState) -> dict:
             topic_name = t.name
             break
 
-    # Determine question or follow-up text
-    if is_followup:
-        followups = state.get("suggested_followups", [])
-        matching_f = [f for f in followups if f.question_id == q_id]
-        if matching_f:
-            question_to_ask = matching_f[0].followup
-        else:
-            question_to_ask = q.question
-    else:
-        question_to_ask = q.question
+    # Determine question text and turn type via helpers
+    is_followup = is_followup_turn(state)
+    question_to_ask, _, _ = get_active_turn_target(state)
 
     prompt_content = INTERVIEW_QUESTION_PROMPT.format(
         topic_name=topic_name,
@@ -258,9 +243,7 @@ def process_answer_node(state: InterviewState) -> dict:
     - If accuracy >= 70% (or retry already used), branches into suggested follow-up or advances to next question.
     """
     index = state.get("current_question_index", 0)
-    is_followup = state.get("is_followup", False)
     questions = state.get("questions", [])
-    followups = state.get("suggested_followups", [])
     is_passed = state.get("is_passed", False)
     retry_count = state.get("retry_count", 0)
 
@@ -275,19 +258,15 @@ def process_answer_node(state: InterviewState) -> dict:
         }
 
     # 2. If accuracy matched (>= 70%) OR re-ask retry was already used:
-    if not is_followup:
-        q = questions[index]
-        q_id = q.question_id
-        matching_f = [f for f in followups if f.question_id == q_id]
-        if matching_f:
-            # Transition to asking follow-up on next turn
-            return {
-                "retry_count": 0,
-                "is_reask": False,
-                "is_followup": True,
-                "matched_keywords": [],
-                "unmatched_keywords": [],
-            }
+    # If currently on a main question and a follow-up exists, branch to follow-up
+    if not is_followup_turn(state) and get_current_followup(state):
+        return {
+            "retry_count": 0,
+            "is_reask": False,
+            "is_followup": True,
+            "matched_keywords": [],
+            "unmatched_keywords": [],
+        }
 
     # If we just finished a follow-up (or no follow-up existed), move to next question
     return {
