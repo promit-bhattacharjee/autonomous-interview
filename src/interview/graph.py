@@ -1,28 +1,64 @@
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from interview.nodes import extract_initial_text, generate_questions_node
-from interview.state import InitialExtracedTextState, InterviewState
+from interview.nodes import (
+    ask_question_node,
+    extract_initial_text,
+    generate_questions_node,
+    process_answer_node,
+)
+from interview.state import InterviewState
+
+
+def route_start(state: InterviewState) -> str:
+    """
+    Routes execution based on whether this is an ongoing interview
+    session or the initial candidate document extraction and plan generation.
+    """
+    if state.get("interview_status") == "in_progress":
+        return "process_answer"
+    return "extract_initial_text"
 
 
 def create_interview_graph():
     """
-    Builds and compiles the LangGraph interview workflow:
-    START -> extract_initial_text -> generate_questions -> END
+    Builds and compiles the turn-by-turn LangGraph interview workflow:
+    - Initial Turn: START -> extract_initial_text -> generate_questions -> ask_question -> END
+    - Response Turns: START -> process_answer -> ask_question -> END
     """
-    workflow = StateGraph(InterviewState, input_schema=InitialExtracedTextState)
+    workflow = StateGraph(InterviewState)
 
-    # Add Nodes
+    # Register Nodes
     workflow.add_node("extract_initial_text", extract_initial_text)
     workflow.add_node("generate_questions", generate_questions_node)
+    workflow.add_node("ask_question", ask_question_node)
+    workflow.add_node("process_answer", process_answer_node)
 
-    # Add Edges
-    workflow.add_edge(START, "extract_initial_text")
+    # Conditional entry point from START
+    workflow.add_conditional_edges(
+        START,
+        route_start,
+        {
+            "extract_initial_text": "extract_initial_text",
+            "process_answer": "process_answer",
+        },
+    )
+
+    # Initial flow
     workflow.add_edge("extract_initial_text", "generate_questions")
-    workflow.add_edge("generate_questions", END)
+    workflow.add_edge("generate_questions", "ask_question")
 
-    # Compile Graph
-    app = workflow.compile()
+    # Turn cycle:
+    # 1. 'ask_question' poses question / concludes, then pauses at END for candidate response
+    workflow.add_edge("ask_question", END)
+
+    # 2. 'process_answer' evaluates answer and routes to 'ask_question' for next turn
+    workflow.add_edge("process_answer", "ask_question")
+
+    # Compile with in-memory checkpointer for multi-turn session persistence
+    checkpointer = MemorySaver()
+    app = workflow.compile(checkpointer=checkpointer)
     return app
 
 
-# Compiled graph instance ready to invoke or stream
+# Compiled graph instance ready for multi-turn execution
 interview_graph = create_interview_graph()

@@ -20,7 +20,7 @@ class InitialExtracedTextOutputState(BaseModel):
     conofidance: float = Field(description="A confidence score of the extraction between 0.0 and 1.0.")
     difficulty: str = Field(description="The difficulty level of the interview")
     expected_time_to_ans:int = Field(description="The expected time to answer")
-    expected_words_to_ans:int = Field(description="The expected number of words to answer")
+    expected_answer_keywords:List[str] = Field(description="The expected keywords should present in answer")
 
 # Pydantic models for structured output
 class TopicState(BaseModel):
@@ -28,7 +28,7 @@ class TopicState(BaseModel):
     name: str
     topic_order: int
     expected_time_to_ans:int
-    expected_words_to_ans:int
+    expected_answer_keywords:list[str]
 
 
 class QuestionState(BaseModel):
@@ -37,9 +37,8 @@ class QuestionState(BaseModel):
     question_order: int
     question: str
     difficulty: str
-    expected_answer: str
     expected_time_to_ans:int
-    expected_words_to_ans:int
+    expected_answer_keywords:list[str]
 
 
 class SuggestedFollowupState(BaseModel):
@@ -48,7 +47,7 @@ class SuggestedFollowupState(BaseModel):
     followup_order: int
     followup: str
     expected_time_to_ans:int
-    expected_words_to_ans:int
+    expected_answer_keywords:list[str]
 
 
 class QuestionListModelState(BaseModel):
@@ -62,6 +61,15 @@ class QuestionListModelState(BaseModel):
 
 # LangGraph state
 class InterviewState(TypedDict, total=False):
+    # Initial setup & candidate data
+    extraced_text: str
+    iterations: int
+    conofidance: float
+    expected_time_to_ans: int
+    expected_words_to_ans: int
+    expected_answer_keywords: List[str]
+
+    # Generated interview plan
     messages: Annotated[List[BaseMessage], add_messages]
     topics: List[TopicState]
     questions: List[QuestionState]
@@ -69,3 +77,10 @@ class InterviewState(TypedDict, total=False):
     expected_total_time_to_ans: int
     difficulty: str
     expected_total_words_to_ans: int
+
+    # Turn-by-turn tracking
+    topic_id: int
+    current_topic_id: int
+    current_question_index: int
+    is_followup: bool
+    interview_status: str

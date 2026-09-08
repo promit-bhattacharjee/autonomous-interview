@@ -1,5 +1,6 @@
 import sys
-import json
+import uuid
+from langchain_core.messages import HumanMessage
 
 # Ensure Windows terminal outputs UTF-8 cleanly
 if hasattr(sys.stdout, "reconfigure"):
@@ -9,11 +10,11 @@ from interview.graph import interview_graph
 
 
 def main():
-    print("=" * 60)
-    print("AI INTERVIEW QUESTION GENERATOR -- LIVE RUNNER")
-    print("=" * 60)
+    print("=" * 65)
+    print("      AI TECHNICAL INTERVIEWER -- LIVE TURN-BY-TURN RUNNER      ")
+    print("=" * 65)
 
-    # 1. Provide your candidate profile, resume, or interview notes
+    # 1. Candidate Profile / Material
     sample_candidate_data = {
         "extraced_text": (
             "Candidate applying for Master's in Computer Science at University of Southern California (USC), USA. "
@@ -26,52 +27,64 @@ def main():
         "expected_words_to_ans": 1000,
         "iterations": 1,
         "conofidance": 1.0,
+        "expected_answer_keywords": ["Machine Learning", "Software Architecture", "USC", "Goals"],
     }
 
-    print("\n[+] Invoking LangGraph workflow with Gemini...")
-    result = interview_graph.invoke(sample_candidate_data)
+    session_id = f"interview-{uuid.uuid4().hex[:8]}"
+    config = {"configurable": {"thread_id": session_id}}
 
-    print("\n[SUCCESS] Generated Interview Plan!\n")
-    print(f"Summary: {len(result.get('topics', []))} Topics | {len(result.get('questions', []))} Questions | {len(result.get('suggested_followups', []))} Follow-ups")
-    print(f"Total Estimated Time: {result.get('expected_total_time_to_ans', 0)} seconds")
-    print(f"Total Word Target: {result.get('expected_total_words_to_ans', 0)} words\n")
+    print("\n[+] Initializing interview and generating customized question plan...")
+    print(f"[+] Session Thread ID: {session_id}")
 
-    # 2. Display Topics
-    print("-" * 60)
-    print("TOPICS:")
-    for topic in result.get("topics", []):
-        t_name = topic.name if hasattr(topic, "name") else topic.get("name")
-        t_id = topic.id if hasattr(topic, "id") else topic.get("id")
-        print(f"  * Topic {t_id}: {t_name}")
+    # Turn 1: Process document, generate question rubric, formulate and ask Question 1
+    state = interview_graph.invoke(sample_candidate_data, config=config)
 
-    # 3. Display Questions & Follow-ups
-    print("\n" + "-" * 60)
-    print("QUESTIONS & PROBING FOLLOW-UPS:")
-    questions = result.get("questions", [])
-    followups = result.get("suggested_followups", [])
+    topics_count = len(state.get("topics", []))
+    questions_count = len(state.get("questions", []))
+    followups_count = len(state.get("suggested_followups", []))
+    print(f"\n[SUCCESS] Interview Plan Generated: {topics_count} Topics | {questions_count} Questions | {followups_count} Follow-ups\n")
 
-    for i, q in enumerate(questions, 1):
-        q_text = q.question if hasattr(q, "question") else q.get("question")
-        q_ans = q.expected_answer if hasattr(q, "expected_answer") else q.get("expected_answer")
-        q_diff = q.difficulty if hasattr(q, "difficulty") else q.get("difficulty")
-        q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
+    # Display the first interviewer question
+    messages = state.get("messages", [])
+    if messages:
+        print("-" * 65)
+        print(f"\n🎙️  [Interviewer]:\n{messages[-1].content}\n")
+        print("-" * 65)
 
-        print(f"\n[Question {i}] (Difficulty: {q_diff})")
-        print(f"  Q: {q_text}")
-        print(f"  Expected Answer: {q_ans}")
+    # Turn-by-Turn Interactive Conversation Loop
+    while state.get("interview_status") != "completed":
+        try:
+            candidate_answer = input("\n👤 [Candidate] (type your answer, or 'quit' to exit):\n> ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n[-] Interview terminated by candidate.")
+            break
 
-        # Find matching follow-ups for this question
-        matching_f = [
-            f for f in followups 
-            if (f.question_id if hasattr(f, "question_id") else f.get("question_id")) == q_id
-        ]
-        for f in matching_f:
-            f_text = f.followup if hasattr(f, "followup") else f.get("followup")
-            print(f"  -> Suggested Follow-up: {f_text}")
+        if not candidate_answer:
+            continue
 
-    print("\n" + "=" * 60)
-    print("Run completed successfully!")
-    print("=" * 60)
+        if candidate_answer.lower() in ("quit", "exit"):
+            print("\n[-] Exiting interview session.")
+            break
+
+        print("\n[+] Interviewer is processing your response...")
+
+        # Resume graph on the same thread with the candidate's answer
+        state = interview_graph.invoke(
+            {"messages": [HumanMessage(content=candidate_answer)]},
+            config=config,
+        )
+
+        messages = state.get("messages", [])
+        if messages:
+            print("-" * 65)
+            print(f"\n🎙️  [Interviewer]:\n{messages[-1].content}\n")
+            print("-" * 65)
+
+    if state.get("interview_status") == "completed":
+        print("\n" + "=" * 65)
+        print("🎉 INTERVIEW CONCLUDED SUCCESSFULLY!")
+        print(f"Total conversation turns: {len(state.get('messages', []))}")
+        print("=" * 65)
 
 
 if __name__ == "__main__":
