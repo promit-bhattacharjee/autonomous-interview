@@ -12,6 +12,7 @@ from interview.prompts import (
 )
 from interview.state import (
     AnswerAccuracyEvaluation,
+    EvaluationRecord,
     InitialExtracedTextOutputState,
     InitialExtracedTextState,
     InterviewState,
@@ -84,6 +85,7 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
         "is_passed": False,
         "matched_keywords": [],
         "unmatched_keywords": [],
+        "evaluations": [],
         "topic_id": first_topic_id,
         "current_topic_id": first_topic_id,
     }
@@ -160,11 +162,31 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     structured_llm = llm.with_structured_output(AnswerAccuracyEvaluation)
     result: AnswerAccuracyEvaluation = structured_llm.invoke(eval_messages)
 
+    is_followup = is_followup_turn(state)
+    followup_obj = get_current_followup(state) if is_followup else None
+
+    record = EvaluationRecord(
+        topic_id=q_tid,
+        question_id=q.question_id,
+        followup_order=followup_obj.followup_order if followup_obj else None,
+        turn_type="suggested_followup" if is_followup else "question",
+        attempt_number=state.get("retry_count", 0) + 1,
+        accuracy_score=float(result.accuracy_score),
+        is_passed=bool(result.is_passed),
+        matched_keywords=result.matched_keywords,
+        unmatched_keywords=result.unmatched_keywords,
+        feedback=result.feedback,
+    )
+
+    current_evaluations = list(state.get("evaluations", []))
+    current_evaluations.append(record)
+
     return {
         "last_accuracy": float(result.accuracy_score),
         "is_passed": bool(result.is_passed),
         "matched_keywords": result.matched_keywords,
         "unmatched_keywords": result.unmatched_keywords,
+        "evaluations": current_evaluations,
     }
 
 

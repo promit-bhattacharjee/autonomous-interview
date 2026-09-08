@@ -2,7 +2,7 @@
 Helper utilities for resolving active questions, follow-ups, and turn types in the interview graph.
 """
 from typing import List, Optional, Tuple
-from interview.state import InterviewState, QuestionState, SuggestedFollowupState
+from interview.state import EvaluationRecord, InterviewState, QuestionState, SuggestedFollowupState
 
 
 def get_current_followup(state: InterviewState) -> Optional[SuggestedFollowupState]:
@@ -52,3 +52,35 @@ def get_active_turn_target(state: InterviewState) -> Tuple[str, List[str], str]:
             return (followup.followup, followup.expected_answer_keywords, "Follow-up Question")
 
     return (current_q.question, current_q.expected_answer_keywords, "Main Question")
+
+
+def get_evaluations_for_question(state: InterviewState, question_id: int) -> List["EvaluationRecord"]:
+    """Retrieves all evaluations for a specific main question."""
+    return [
+        e for e in state.get("evaluations", [])
+        if e.question_id == question_id and e.turn_type == "question"
+    ]
+
+
+def get_evaluations_for_followup(state: InterviewState, question_id: int) -> List["EvaluationRecord"]:
+    """Retrieves all evaluations for a specific suggested follow-up."""
+    return [
+        e for e in state.get("evaluations", [])
+        if e.question_id == question_id and e.turn_type == "suggested_followup"
+    ]
+
+
+def get_topic_evaluations(state: InterviewState, topic_id: int) -> List["EvaluationRecord"]:
+    """Retrieves all evaluation records for a specific topic."""
+    return [
+        e for e in state.get("evaluations", [])
+        if e.topic_id == topic_id
+    ]
+
+
+def get_topic_score(state: InterviewState, topic_id: int) -> float:
+    """Calculates average accuracy percentage across all turns for a specific topic."""
+    evals = get_topic_evaluations(state, topic_id)
+    if not evals:
+        return 0.0
+    return sum(e.accuracy_score for e in evals) / len(evals)

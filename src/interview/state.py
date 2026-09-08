@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional, TypedDict
+from typing import Annotated, List, Literal, Optional, TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
@@ -67,6 +67,22 @@ class AnswerAccuracyEvaluation(BaseModel):
     feedback: str = Field(description="Brief assessment of candidate response against expected keywords")
 
 
+class EvaluationRecord(BaseModel):
+    # Relational foreign keys
+    topic_id: int = Field(description="Foreign key pointing to TopicState.id")
+    question_id: int = Field(description="Foreign key pointing to QuestionState.question_id")
+    followup_order: Optional[int] = Field(default=None, description="followup_order if suggested_followup, or None if main question")
+    turn_type: Literal["question", "suggested_followup"] = Field(description="'question' for main questions, 'suggested_followup' for follow-up questions")
+    attempt_number: int = Field(default=1, description="1 for initial attempt, 2 for re-ask attempt")
+
+    # Evaluation metrics
+    accuracy_score: float = Field(description="Accuracy score between 0.0 and 100.0")
+    is_passed: bool = Field(description="True if accuracy_score >= 70.0, False otherwise")
+    matched_keywords: List[str] = Field(default_factory=list, description="Keywords covered in candidate answer")
+    unmatched_keywords: List[str] = Field(default_factory=list, description="Keywords that were unmatched or missed")
+    feedback: str = Field(description="Brief constructive evaluation")
+
+
 # LangGraph state
 class InterviewState(TypedDict, total=False):
     # Initial setup & candidate data
@@ -100,3 +116,6 @@ class InterviewState(TypedDict, total=False):
     unmatched_keywords: List[str]
     retry_count: int
     is_reask: bool
+
+    # Relational evaluation history
+    evaluations: List[EvaluationRecord]
