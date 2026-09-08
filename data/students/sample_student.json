@@ -6,8 +6,9 @@
   "target_course": "MSc Artificial Intelligence with Advanced Research",
   "academic_background": "BSc in Software Engineering, CGPA 3.65 out of 4.0",
   "english_proficiency": "IELTS Overall 7.5 (Listening 8.0, Reading 7.5, Writing 7.0, Speaking 7.5)",
-  "tuition_fee_gbp": "£16,500",
-  "living_cost_gbp": "£12,500 for 9-month maintenance requirement",
-  "sponsor_details": "Father and self savings of £35,000 held in bank account exceeding 28 consecutive days",
+  "tuition_fee_gbp": 16500.0,
+  "living_cost_gbp": 12500.0,
+  "available_funds_gbp": 35000.0,
+  "sponsor_details": "Father and personal savings held in Standard Chartered Bank meeting 28-day UKVI rule",
   "post_study_plan": "Return immediately to home country to work as an AI Solutions Architect in the emerging software export sector"
 }

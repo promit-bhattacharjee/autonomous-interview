@@ -1,0 +1,42 @@
+{
+  "university_id": "UK-HERTS-01",
+  "official_name": "University of Hertfordshire",
+  "campus_location": "Hatfield, Hertfordshire (Outside London, 25 mins to London King's Cross)",
+  "tuition_fee_gbp": 16500.0,
+  "living_cost_guideline_gbp": 12500.0,
+  "target_course": "MSc Artificial Intelligence with Advanced Research",
+  "degree_level": "Postgraduate (Level 7)",
+  "duration_months": 24,
+  "core_modules": [
+    {
+      "module_code": "7COM1076",
+      "title": "Machine Learning & Neural Networks",
+      "key_technologies": ["PyTorch", "TensorFlow", "CUDA"]
+    },
+    {
+      "module_code": "7COM1077",
+      "title": "Robotics & Autonomous Systems",
+      "key_technologies": ["ROS2", "OpenCV", "LiDAR simulation"]
+    },
+    {
+      "module_code": "7COM1080",
+      "title": "Advanced Artificial Intelligence Research Project",
+      "key_technologies": ["Independent Research Thesis", "Lab Benchmarking"]
+    }
+  ],
+  "campus_facilities": [
+    "Robotics and Autonomous Systems Laboratory",
+    "High-Performance Computing Cluster (GPU clusters)",
+    "Enterprise & Placement Hub"
+  ],
+  "competitor_differentiators": [
+    "Affordable tuition fee of £16,500 compared to central London universities charging £28,000+ for similar AI degrees",
+    "Integrated 1-year advanced research component directly tied into accredited research faculty labs",
+    "Hatfield location provides direct London access in 25 minutes while maintaining lower Outside London living costs"
+  ],
+  "compliance_rubrics": [
+    "Candidate must articulate why Hertfordshire was chosen over central London universities (fees, research labs, campus environment)",
+    "Candidate must name specific core modules (e.g. 7COM1076 Machine Learning, 7COM1077 Robotics) and link them to their background",
+    "Candidate must know total costs (£16,500 tuition + £12,500 living maintenance) and confirm 28-day funds availability"
+  ]
+}

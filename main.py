@@ -1,67 +1,106 @@
 import sys
-import uuid
-from langchain_core.messages import HumanMessage
+from pathlib import Path
 
 # Ensure Windows terminal outputs UTF-8 cleanly
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import os
-from pathlib import Path
-from interview.graph import interview_graph
-from interview.session_builder import (
-    build_initial_interview_payload,
-    load_question_file,
-    load_student_profile,
-)
+src_path = str(Path(__file__).resolve().parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from interview.service import InterviewSession
+
+
+def print_final_evaluation_report(final_eval: dict):
+    if not final_eval:
+        return
+
+    score = final_eval.get("overall_score", 0.0)
+    status = final_eval.get("overall_status", "UNKNOWN")
+    topics = final_eval.get("topic_breakdown", [])
+    strengths = final_eval.get("strengths", [])
+    improvements = final_eval.get("areas_for_improvement", [])
+    recommendation = final_eval.get("recommendation", "")
+
+    status_badge = f"[{status}]"
+    if status == "PASSED":
+        status_badge = f"✅ {status_badge}"
+    elif status == "CONDITIONAL_PASS":
+        status_badge = f"⚠️ {status_badge}"
+    else:
+        status_badge = f"❌ {status_badge}"
+
+    print("\n" + "=" * 75)
+    print("      🎓 OFFICIAL UKVI CREDIBILITY & ADMISSIONS FINAL EVALUATION REPORT      ")
+    print("=" * 75)
+    print(f"\n • OVERALL COMPOSITE SCORE : {score:.1f}%")
+    print(f" • ADMISSIONS & VISA STATUS: {status_badge}")
+
+    if topics:
+        print("\n" + "-" * 75)
+        print(" 📋 TOPIC-BY-TOPIC BREAKDOWN:")
+        print("-" * 75)
+        for t in topics:
+            t_name = t.get("topic_name", "Topic")
+            t_score = t.get("average_score", 0.0)
+            t_pass = "PASSED" if t.get("is_passed") else "FAILED"
+            t_feedback = t.get("summary_feedback", "")
+            print(f" • {t_name:<35} | Score: {t_score:5.1f}% | {t_pass}")
+            if t_feedback:
+                print(f"   Assessment: {t_feedback}")
+
+    if strengths:
+        print("\n" + "-" * 75)
+        print(" 🌟 CANDIDATE KEY STRENGTHS:")
+        print("-" * 75)
+        for s in strengths:
+            print(f"  + {s}")
+
+    if improvements:
+        print("\n" + "-" * 75)
+        print(" ⚠️  AREAS FOR IMPROVEMENT / NOTED GAPS:")
+        print("-" * 75)
+        for imp in improvements:
+            print(f"  - {imp}")
+
+    if recommendation:
+        print("\n" + "-" * 75)
+        print(" 📝 OFFICIAL RECOMMENDATION & VISA SPONSORSHIP JUSTIFICATION:")
+        print("-" * 75)
+        print(f"{recommendation.strip()}\n")
+
+    print("=" * 75 + "\n")
 
 
 def main():
-    print("=" * 65)
+    print("=" * 75)
     print("   AI UK CREDIBILITY & ACADEMIC INTERVIEWER -- TERMINAL RUNNER   ")
-    print("=" * 65)
+    print("   (Powered by OpenRouter DeepSeek V3 Brain & Gemini Voice Interface)   ")
+    print("=" * 75)
 
-    base_dir = Path(__file__).resolve().parent
-    question_path = base_dir / "data" / "questions" / "uk_credibility_questions.txt"
-    student_path = base_dir / "data" / "students" / "sample_student.json"
+    print("\n[+] Initializing InterviewSession...")
+    print("[+] Loading student & university data from standardized mock API JSON...")
+    print("[+] Executing OpenRouter DeepSeek V3 for dynamic question & rubric generation...")
 
-    print(f"\n[1] Ingesting Admin Question File: {question_path.name}")
-    question_content = load_question_file(str(question_path))
+    session = InterviewSession(student_id="UK-CAS-2026-9041", university_id="UK-HERTS-01")
+    first_question = session.start()
 
-    print(f"[2] Ingesting Student Profile Data: {student_path.name}")
-    student_data = load_student_profile(str(student_path))
-    print(f"    - Student: {student_data.get('full_name')} (Target: {student_data.get('target_university')})")
-
-    # Merge student profile + question file into initial payload
-    interview_payload = build_initial_interview_payload(
-        student_data=student_data,
-        question_content=question_content,
-        difficulty="Medium",
-    )
-
-    session_id = f"uk-interview-{uuid.uuid4().hex[:8]}"
-    config = {"configurable": {"thread_id": session_id}}
-
-    print("\n[+] Initializing interview and generating customized question rubric...")
-    print(f"[+] Session Thread ID: {session_id}")
-
-    # Turn 1: Process document, generate question rubric, formulate and ask Question 1
-    state = interview_graph.invoke(interview_payload, config=config)
-
+    state = session.latest_state
     topics_count = len(state.get("topics", []))
     questions_count = len(state.get("questions", []))
     followups_count = len(state.get("suggested_followups", []))
     print(f"\n[SUCCESS] Interview Plan Generated: {topics_count} Topics | {questions_count} Questions | {followups_count} Follow-ups\n")
 
-    # Display the first interviewer question
-    messages = state.get("messages", [])
-    if messages:
-        print("-" * 65)
-        print(f"\n🎙️  [Interviewer]:\n{messages[-1].content}\n")
-        print("-" * 65)
+    if first_question:
+        print("-" * 75)
+        print(f"\n🎙️  [Interviewer]:\n{first_question}\n")
+        print("-" * 75)
 
     # Turn-by-Turn Interactive Conversation Loop
-    while state.get("interview_status") != "completed":
+    while session.latest_state.get("interview_status") != "completed":
         try:
             candidate_answer = input("\n👤 [Candidate] (type your answer, or 'quit' to exit):\n> ").strip()
         except (KeyboardInterrupt, EOFError):
@@ -75,38 +114,38 @@ def main():
             print("\n[-] Exiting interview session.")
             break
 
-        print("\n[+] Interviewer is processing your response...")
+        print("\n[+] OpenRouter DeepSeek V3 evaluating your response...")
 
-        # Resume graph on the same thread with the candidate's answer
-        state = interview_graph.invoke(
-            {"messages": [HumanMessage(content=candidate_answer)]},
-            config=config,
-        )
+        next_text, is_completed, eval_data = session.submit_candidate_answer(candidate_answer)
 
-        evals = state.get("evaluations", [])
-        latest_eval = evals[-1] if evals else None
-        is_reask = bool(latest_eval.attempt_number == 1 and not latest_eval.is_passed) if latest_eval else False
-        if latest_eval is not None:
-            status_label = "PASSED (>= 70%)" if latest_eval.is_passed else "BELOW THRESHOLD (< 70%)"
-            action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding to next question..."
-            print(f"\n📊 [Accuracy Check]: {latest_eval.accuracy_score:.1f}% (Attempt {latest_eval.attempt_number}) | {status_label} {action_label}")
-            print(f"   [Relational IDs]: Topic ID: {latest_eval.topic_id} | Question ID: {latest_eval.question_id}")
-            if latest_eval.matched_keywords:
-                print(f"   ✅ Matched: {', '.join(latest_eval.matched_keywords)}")
-            if latest_eval.unmatched_keywords:
-                print(f"   ❌ Unmatched: {', '.join(latest_eval.unmatched_keywords)}")
+        if eval_data:
+            is_reask = eval_data.get("is_reask", False)
+            status_label = "PASSED (>= 70%)" if eval_data.get("is_passed") else "BELOW THRESHOLD (< 70%)"
+            action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding to next turn..."
+            print(f"\n📊 [Turn Evaluation]: {eval_data.get('accuracy_score', 0):.1f}% (Attempt {eval_data.get('attempt_number', 1)}) | {status_label} {action_label}")
+            print(f"   Topic ID: {eval_data.get('active_topic_id')} | Question ID: {eval_data.get('active_question_id')}")
+            if eval_data.get("matched_keywords"):
+                print(f"   ✅ Matched: {', '.join(eval_data.get('matched_keywords'))}")
+            if eval_data.get("unmatched_keywords"):
+                print(f"   ❌ Unmatched: {', '.join(eval_data.get('unmatched_keywords'))}")
+            if eval_data.get("feedback"):
+                print(f"   💡 Feedback: {eval_data.get('feedback')}")
 
-        messages = state.get("messages", [])
-        if messages:
-            print("-" * 65)
-            print(f"\n🎙️  [Interviewer]:\n{messages[-1].content}\n")
-            print("-" * 65)
+        if next_text:
+            print("-" * 75)
+            print(f"\n🎙️  [Interviewer]:\n{next_text}\n")
+            print("-" * 75)
 
-    if state.get("interview_status") == "completed":
-        print("\n" + "=" * 65)
-        print("🎉 INTERVIEW CONCLUDED SUCCESSFULLY!")
-        print(f"Total conversation turns: {len(state.get('messages', []))}")
-        print("=" * 65)
+        # If completed, check for final evaluation report
+        if is_completed:
+            final_eval = eval_data.get("final_evaluation") or session.get_final_evaluation()
+            print_final_evaluation_report(final_eval)
+            break
+
+    if session.latest_state.get("interview_status") == "completed" and not eval_data.get("final_evaluation"):
+        final_eval = session.get_final_evaluation()
+        if final_eval:
+            print_final_evaluation_report(final_eval)
 
 
 if __name__ == "__main__":

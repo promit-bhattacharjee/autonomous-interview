@@ -3,7 +3,7 @@ from langgraph.graph import END, START, StateGraph
 from interview.nodes import (
     ask_question_node,
     evaluate_answer_node,
-    extract_initial_text,
+    generate_final_evaluation_node,
     generate_questions_node,
     process_answer_node,
 )
@@ -12,58 +12,81 @@ from interview.state import InterviewState
 
 def route_start(state: InterviewState) -> str:
     """
-    Routes execution based on whether this is an ongoing interview
-    session, a direct-question interview, or initial candidate document extraction.
+    Routes execution based on whether this is an ongoing interview session,
+    direct questions, or dynamic question generation.
     """
+    if state.get("interview_status") == "completed" and not state.get("final_evaluation"):
+        return "generate_final_evaluation"
     if state.get("interview_status") == "in_progress":
         return "evaluate_answer"
     if state.get("questions"):
         return "ask_question"
-    return "extract_initial_text"
+    return "generate_questions"
+
+
+def route_after_ask(state: InterviewState) -> str:
+    """
+    If the interview was concluded in ask_question_node, route to generate_final_evaluation.
+    Otherwise pause turn execution by routing to END.
+    """
+    if state.get("interview_status") == "completed":
+        return "generate_final_evaluation"
+    return END
 
 
 def create_interview_graph():
     """
     Builds and compiles the turn-by-turn LangGraph interview workflow:
-    - Direct Question Turn 1: START -> ask_question -> END
-    - Document Initial Turn: START -> extract_initial_text -> generate_questions -> ask_question -> END
-    - Response Turns: START -> evaluate_answer -> process_answer -> ask_question -> END
+    - Session Init: START -> generate_questions -> ask_question -> END
+    - Active Response Turns: START -> evaluate_answer -> process_answer -> ask_question -> [END or generate_final_evaluation]
+    - Interview Concluded: ask_question -> generate_final_evaluation -> END
     """
     workflow = StateGraph(InterviewState)
 
     # Register Nodes
-    workflow.add_node("extract_initial_text", extract_initial_text)
     workflow.add_node("generate_questions", generate_questions_node)
     workflow.add_node("evaluate_answer", evaluate_answer_node)
     workflow.add_node("process_answer", process_answer_node)
     workflow.add_node("ask_question", ask_question_node)
+    workflow.add_node("generate_final_evaluation", generate_final_evaluation_node)
 
     # Conditional entry point from START
     workflow.add_conditional_edges(
         START,
         route_start,
         {
-            "extract_initial_text": "extract_initial_text",
+            "generate_questions": "generate_questions",
             "evaluate_answer": "evaluate_answer",
             "ask_question": "ask_question",
+            "generate_final_evaluation": "generate_final_evaluation",
         },
     )
 
-    # Initial flow
-    workflow.add_edge("extract_initial_text", "generate_questions")
+    # Question generation flows directly to asking Question 1
     workflow.add_edge("generate_questions", "ask_question")
 
-    # Turn cycle:
-    # 1. Candidate response enters evaluate_answer -> process_answer -> ask_question -> END
+    # Turn cycle
     workflow.add_edge("evaluate_answer", "process_answer")
     workflow.add_edge("process_answer", "ask_question")
-    workflow.add_edge("ask_question", END)
 
-    # Compile with in-memory checkpointer for multi-turn session persistence
+    # Conclude or pause turn
+    workflow.add_conditional_edges(
+        "ask_question",
+        route_after_ask,
+        {
+            "generate_final_evaluation": "generate_final_evaluation",
+            END: END,
+        },
+    )
+
+    # Final evaluation concludes the workflow
+    workflow.add_edge("generate_final_evaluation", END)
+
+    # Compile with checkpointer for multi-turn thread persistence
     checkpointer = MemorySaver()
     app = workflow.compile(checkpointer=checkpointer)
     return app
 
 
-# Compiled graph instance ready for multi-turn execution
+# Compiled graph instance
 interview_graph = create_interview_graph()

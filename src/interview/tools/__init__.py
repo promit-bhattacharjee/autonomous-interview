@@ -12,6 +12,7 @@ from interview.tools.question_helpers import (
     is_active_turn_followup,
     is_active_turn_reask,
 )
+from interview.tools.debug_helpers import print_interview_state_debug
 
 __all__ = [
     "get_active_followup",
@@ -26,4 +27,5 @@ __all__ = [
     "get_topic_score",
     "is_active_turn_followup",
     "is_active_turn_reask",
+    "print_interview_state_debug",
 ]
