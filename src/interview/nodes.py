@@ -82,21 +82,77 @@ def generate_questions_node(state: InterviewState) -> dict:
     """
     expected_time = state.get("expected_total_time_to_ans", 45)
 
-    # 1. Resolve compressed StudentData
+    # 1. Resolve and validate compressed StudentData
     student_data = state.get("student_data")
     if not student_data:
-        student_id = state.get("student_id") or "UK-CAS-2026-9041"
+        student_id = state.get("student_id")
+        if not student_id:
+            error_msg = "❌ [DATA VALIDATION FAILED]: Neither 'student_data' nor 'student_id' was provided. Interview session terminated."
+            return {
+                "interview_status": "completed",
+                "messages": [AIMessage(content=error_msg)],
+            }
         from mock_api import fetch_student_api
         raw_student = fetch_student_api(student_id)
+        if not raw_student:
+            error_msg = f"❌ [DATA VALIDATION FAILED]: Student profile for student_id '{student_id}' was not found in data repository. Interview session terminated."
+            return {
+                "interview_status": "completed",
+                "messages": [AIMessage(content=error_msg)],
+            }
         student_data = StudentData(**{k: v for k, v in raw_student.items() if k in StudentData.model_fields})
 
-    # 2. Resolve compressed UniversityData
+    # Validate essential student fields
+    missing_student_fields = []
+    if not getattr(student_data, "student_id", None):
+        missing_student_fields.append("student_id")
+    if not getattr(student_data, "full_name", None):
+        missing_student_fields.append("full_name")
+    if not getattr(student_data, "target_university", None):
+        missing_student_fields.append("target_university")
+    if not getattr(student_data, "target_course", None):
+        missing_student_fields.append("target_course")
+
+    if missing_student_fields:
+        error_msg = f"❌ [DATA VALIDATION FAILED]: Incomplete student data. Missing required fields: {', '.join(missing_student_fields)}. Interview session terminated."
+        return {
+            "interview_status": "completed",
+            "messages": [AIMessage(content=error_msg)],
+        }
+
+    # 2. Resolve and validate compressed UniversityData
     university_data = state.get("university_data")
     if not university_data:
-        university_id = state.get("university_id") or "UK-HERTS-01"
+        university_id = state.get("university_id")
+        if not university_id:
+            error_msg = "❌ [DATA VALIDATION FAILED]: Neither 'university_data' nor 'university_id' was provided. Interview session terminated."
+            return {
+                "interview_status": "completed",
+                "messages": [AIMessage(content=error_msg)],
+            }
         from mock_api import fetch_university_api
         raw_univ = fetch_university_api(university_id)
+        if not raw_univ:
+            error_msg = f"❌ [DATA VALIDATION FAILED]: University specifications for university_id '{university_id}' were not found in data repository. Interview session terminated."
+            return {
+                "interview_status": "completed",
+                "messages": [AIMessage(content=error_msg)],
+            }
         university_data = UniversityData(**{k: v for k, v in raw_univ.items() if k in UniversityData.model_fields})
+
+    # Validate essential university fields
+    missing_univ_fields = []
+    if not getattr(university_data, "university_id", None):
+        missing_univ_fields.append("university_id")
+    if not getattr(university_data, "official_name", None):
+        missing_univ_fields.append("official_name")
+
+    if missing_univ_fields:
+        error_msg = f"❌ [DATA VALIDATION FAILED]: Incomplete university data. Missing required fields: {', '.join(missing_univ_fields)}. Interview session terminated."
+        return {
+            "interview_status": "completed",
+            "messages": [AIMessage(content=error_msg)],
+        }
 
     expected_kw = [
         student_data.target_university,

@@ -24,6 +24,16 @@ def route_start(state: InterviewState) -> str:
     return "generate_questions"
 
 
+def route_after_generate(state: InterviewState) -> str:
+    """
+    If question generation was terminated due to missing data, route directly to END.
+    Otherwise proceed to ask_question.
+    """
+    if state.get("interview_status") == "completed":
+        return END
+    return "ask_question"
+
+
 def route_after_ask(state: InterviewState) -> str:
     """
     If the interview was concluded in ask_question_node, route to generate_final_evaluation.
@@ -37,7 +47,7 @@ def route_after_ask(state: InterviewState) -> str:
 def create_interview_graph():
     """
     Builds and compiles the turn-by-turn LangGraph interview workflow:
-    - Session Init: START -> generate_questions -> ask_question -> END
+    - Session Init: START -> generate_questions -> [ask_question or END if terminated]
     - Active Response Turns: START -> evaluate_answer -> process_answer -> ask_question -> [END or generate_final_evaluation]
     - Interview Concluded: ask_question -> generate_final_evaluation -> END
     """
@@ -62,8 +72,15 @@ def create_interview_graph():
         },
     )
 
-    # Question generation flows directly to asking Question 1
-    workflow.add_edge("generate_questions", "ask_question")
+    # Question generation flows to asking Question 1, or terminates on missing data
+    workflow.add_conditional_edges(
+        "generate_questions",
+        route_after_generate,
+        {
+            "ask_question": "ask_question",
+            END: END,
+        },
+    )
 
     # Turn cycle
     workflow.add_edge("evaluate_answer", "process_answer")

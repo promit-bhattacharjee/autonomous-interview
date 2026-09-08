@@ -89,6 +89,13 @@ def main():
     first_question = session.start()
 
     state = session.latest_state
+    if state.get("interview_status") == "completed":
+        print("\n" + "=" * 75)
+        print("🛑 SESSION TERMINATED:")
+        print(f"{first_question}")
+        print("=" * 75 + "\n")
+        return
+
     topics_count = len(state.get("topics", []))
     questions_count = len(state.get("questions", []))
     followups_count = len(state.get("suggested_followups", []))

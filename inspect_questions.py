@@ -30,6 +30,15 @@ def main():
     session = InterviewSession()
     session.start()
 
+    if session.latest_state.get("interview_status") == "completed" and not session.latest_state.get("questions"):
+        print("\n" + "=" * 80)
+        print("🛑 SESSION TERMINATED:")
+        messages = session.latest_state.get("messages", [])
+        if messages:
+            print(messages[-1].content)
+        print("=" * 80 + "\n")
+        return
+
     # Print comprehensive structured debug output
     print_interview_state_debug(session.latest_state)
 
