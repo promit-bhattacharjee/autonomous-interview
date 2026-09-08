@@ -74,6 +74,14 @@ def main():
             config=config,
         )
 
+        acc = state.get("last_accuracy")
+        passed = state.get("is_passed")
+        is_reask = state.get("is_reask")
+        if acc is not None:
+            status_label = "PASSED (>= 70%)" if passed else "BELOW THRESHOLD (< 70%)"
+            action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding..."
+            print(f"\n📊 [Accuracy Check]: {acc:.1f}% | {status_label} {action_label}")
+
         messages = state.get("messages", [])
         if messages:
             print("-" * 65)

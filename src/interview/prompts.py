@@ -77,9 +77,11 @@ You are conducting a technical interview with the candidate.
 Current Topic: {topic_name}
 Question to Ask: {question_text}
 Is Follow-up: {is_followup}
+Is Re-ask: {is_reask}
 
 Instructions:
 - Speak directly to the candidate in a natural, engaging, and professional interviewer tone.
+- If this is a re-ask (Is Re-ask: Yes), politely acknowledge the candidate's prior response and prompt them to elaborate, clarify, or provide deeper technical detail on this question.
 - If this is a follow-up, briefly refer back to the conversation before asking.
 - If transitioning to a new topic, briefly introduce the topic.
 - Do NOT answer the question or reveal evaluation criteria. Ask the question clearly and invite their response.
@@ -87,4 +89,46 @@ Instructions:
 
 INTERVIEW_CONCLUDE_PROMPT = """You are a professional AI interviewer.
 The interview has concluded. Warmly thank the candidate for their time, highlight that their responses were insightful, and let them know the evaluation/next steps will follow. Keep it gracious and concise.
+"""
+
+
+# ==============================================================================
+# Answer Evaluation Prompts
+# ==============================================================================
+ANSWER_EVALUATION_SYSTEM_PROMPT = """You are an expert technical interviewer and objective evaluator.
+
+Your task is to evaluate the candidate's latest response against the interviewer's question, topic, and expected answer keypoints/keywords.
+
+### Evaluation Rules:
+1. **Semantic & Keyword Coverage**:
+   - Check if the candidate's response correctly discusses and covers the concepts in `expected_answer_keywords`.
+   - The candidate does not need to parrot exact keywords verbatim if their technical explanation clearly demonstrates understanding of the core concept.
+2. **Calculate Accuracy Score (0.0 to 100.0)**:
+   - Score between 0.0 and 100.0 based on conceptual depth and keyword coverage.
+   - If the candidate answers accurately and covers >= 70% of the key concepts, award >= 70.0.
+   - If the answer is vague, off-topic, incorrect, or misses most target concepts, score below 70.0.
+3. **Threshold Check (`is_passed`)**:
+   - Set `is_passed = True` if and only if `accuracy_score >= 70.0`.
+   - Set `is_passed = False` if `accuracy_score < 70.0`.
+4. **Identify Keywords**:
+   - `matched_keywords`: The specific target keywords or concepts the candidate successfully addressed.
+   - `missing_keywords`: The target keywords or concepts that were omitted or insufficiently explained.
+5. **Feedback**:
+   - Provide a 1-2 sentence concise, objective technical assessment.
+"""
+
+ANSWER_EVALUATION_HUMAN_PROMPT = """Evaluate the candidate's latest response:
+
+- Topic: {topic_name}
+- Context Type: {context_type}
+- Interviewer Prompt / Question Asked:
+{last_ai_message}
+
+- Candidate's Response:
+{last_human_message}
+
+- Target Expected Answer Keywords / Keypoints:
+{expected_keywords}
+
+Please evaluate the response and produce structured output conforming to AnswerAccuracyEvaluation.
 """

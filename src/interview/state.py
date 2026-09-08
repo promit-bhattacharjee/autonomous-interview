@@ -59,6 +59,14 @@ class QuestionListModelState(BaseModel):
     difficulty: str = Field(description="The difficulty level of the interview")
 
 
+class AnswerAccuracyEvaluation(BaseModel):
+    accuracy_score: float = Field(description="Accuracy score between 0.0 and 100.0 based on keyword and conceptual coverage")
+    is_passed: bool = Field(description="True if accuracy_score >= 70.0, False otherwise")
+    matched_keywords: List[str] = Field(description="Keywords from expected_answer_keywords covered in candidate answer")
+    missing_keywords: List[str] = Field(description="Keywords from expected_answer_keywords missed or inadequately addressed")
+    feedback: str = Field(description="Brief assessment of candidate response against expected keywords")
+
+
 # LangGraph state
 class InterviewState(TypedDict, total=False):
     # Initial setup & candidate data
@@ -78,9 +86,15 @@ class InterviewState(TypedDict, total=False):
     difficulty: str
     expected_total_words_to_ans: int
 
-    # Turn-by-turn tracking
+    # Turn-by-turn tracking & routing
     topic_id: int
     current_topic_id: int
     current_question_index: int
     is_followup: bool
     interview_status: str
+
+    # Answer accuracy evaluation & retry tracking
+    last_accuracy: float
+    is_passed: bool
+    retry_count: int
+    is_reask: bool

@@ -2,6 +2,8 @@ from typing import List
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from interview.llm import get_llm
 from interview.prompts import (
+    ANSWER_EVALUATION_HUMAN_PROMPT,
+    ANSWER_EVALUATION_SYSTEM_PROMPT,
     DOCUMENT_EXTRACTION_PROMPT,
     QUESTION_GENERATION_FROM_STATE_PROMPT,
     QUESTION_GENERATION_HUMAN_PROMPT,
@@ -9,6 +11,7 @@ from interview.prompts import (
     INTERVIEW_CONCLUDE_PROMPT,
 )
 from interview.state import (
+    AnswerAccuracyEvaluation,
     InitialExtracedTextOutputState,
     InitialExtracedTextState,
     InterviewState,
@@ -62,6 +65,10 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
     result_dict["current_question_index"] = 0
     result_dict["is_followup"] = False
     result_dict["interview_status"] = "in_progress"
+    result_dict["retry_count"] = 0
+    result_dict["is_reask"] = False
+    result_dict["last_accuracy"] = 0.0
+    result_dict["is_passed"] = False
 
     first_topic_id = None
     if result_dict.get("topics"):
@@ -84,14 +91,86 @@ def _ensure_text_content(msg: AIMessage) -> AIMessage:
     return msg
 
 
+def evaluate_answer_node(state: InterviewState) -> dict:
+    """
+    Evaluates candidate's latest response against the interviewer's prompt,
+    the active topic, and target expected_answer_keywords (checking >= 70% threshold).
+    """
+    messages_list = state.get("messages", [])
+    last_ai_msg = next((m for m in reversed(messages_list) if isinstance(m, AIMessage)), None)
+    last_human_msg = next((m for m in reversed(messages_list) if isinstance(m, HumanMessage)), None)
+
+    if not last_human_msg:
+        return {"last_accuracy": 100.0, "is_passed": True}
+
+    questions = state.get("questions", [])
+    index = state.get("current_question_index", 0)
+    is_followup = state.get("is_followup", False)
+
+    if index >= len(questions):
+        return {"last_accuracy": 100.0, "is_passed": True}
+
+    q = questions[index]
+    q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
+    q_tid = q.topic_id if hasattr(q, "topic_id") else q.get("topic_id")
+
+    # Locate topic name
+    topic_name = "Technical Proficiency"
+    for t in state.get("topics", []):
+        t_id = t.id if hasattr(t, "id") else t.get("id")
+        if t_id == q_tid:
+            topic_name = t.name if hasattr(t, "name") else t.get("name", "")
+            break
+
+    # Determine keywords and context based on whether this is a follow-up or main question
+    if is_followup:
+        followups = state.get("suggested_followups", [])
+        matching_f = [
+            f for f in followups
+            if (f.question_id if hasattr(f, "question_id") else f.get("question_id")) == q_id
+        ]
+        if matching_f:
+            f = matching_f[0]
+            keywords_list = f.expected_answer_keywords if hasattr(f, "expected_answer_keywords") else f.get("expected_answer_keywords", [])
+        else:
+            keywords_list = q.expected_answer_keywords if hasattr(q, "expected_answer_keywords") else q.get("expected_answer_keywords", [])
+        context_type = "Follow-up Question"
+    else:
+        keywords_list = q.expected_answer_keywords if hasattr(q, "expected_answer_keywords") else q.get("expected_answer_keywords", [])
+        context_type = "Main Question"
+
+    prompt_content = ANSWER_EVALUATION_HUMAN_PROMPT.format(
+        topic_name=topic_name,
+        context_type=context_type,
+        last_ai_message=last_ai_msg.content if last_ai_msg else "N/A",
+        last_human_message=last_human_msg.content if last_human_msg else "",
+        expected_keywords=", ".join(keywords_list) if keywords_list else "General technical accuracy and relevant concepts",
+    )
+
+    eval_messages = [
+        SystemMessage(content=ANSWER_EVALUATION_SYSTEM_PROMPT),
+        HumanMessage(content=prompt_content),
+    ]
+
+    llm = get_llm(model_name="gemini-3.6-flash", model_provider="google_genai")
+    structured_llm = llm.with_structured_output(AnswerAccuracyEvaluation)
+    result: AnswerAccuracyEvaluation = structured_llm.invoke(eval_messages)
+
+    return {
+        "last_accuracy": float(result.accuracy_score),
+        "is_passed": bool(result.is_passed),
+    }
+
+
 def ask_question_node(state: InterviewState) -> dict:
     """
-    Interviewer turn: Formulates and asks the active main question or follow-up question.
+    Interviewer turn: Formulates and asks the active main question, follow-up, or re-ask.
     Concludes the interview if all questions are completed.
     """
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
     is_followup = state.get("is_followup", False)
+    is_reask = state.get("is_reask", False)
 
     # Check if all questions are completed
     if index >= len(questions):
@@ -110,7 +189,7 @@ def ask_question_node(state: InterviewState) -> dict:
     q_tid = q.topic_id if hasattr(q, "topic_id") else q.get("topic_id")
 
     # Locate topic name
-    topic_name = ""
+    topic_name = "Technical Proficiency"
     for t in state.get("topics", []):
         t_id = t.id if hasattr(t, "id") else t.get("id")
         if t_id == q_tid:
@@ -137,14 +216,19 @@ def ask_question_node(state: InterviewState) -> dict:
         topic_name=topic_name,
         question_text=question_to_ask,
         is_followup="Yes" if is_followup else "No",
+        is_reask="Yes" if is_reask else "No",
     )
 
     history = state.get("messages", [])[-2:] if state.get("messages") else []
-    request_instruction = (
-        "Please ask the candidate this follow-up question naturally."
-        if is_followup
-        else "Please introduce and present this interview question to the candidate."
-    )
+    if is_reask:
+        request_instruction = (
+            "The candidate's previous answer missed some key technical details or scored below the required threshold. "
+            "Please politely acknowledge their previous response and re-ask or prompt them to elaborate on this question."
+        )
+    elif is_followup:
+        request_instruction = "Please ask the candidate this follow-up question naturally."
+    else:
+        request_instruction = "Please introduce and present this interview question to the candidate."
 
     messages = [SystemMessage(content=prompt_content)] + list(history) + [HumanMessage(content=request_instruction)]
 
@@ -160,19 +244,29 @@ def ask_question_node(state: InterviewState) -> dict:
 
 def process_answer_node(state: InterviewState) -> dict:
     """
-    Candidate response evaluation turn:
-    Consumes candidate answer, decides whether to branch into a suggested follow-up
-    or advance to the next main question.
+    Candidate response routing turn:
+    Consumes evaluation results.
+    - If accuracy < 70% and not yet re-asked, triggers a re-ask of the same question/followup.
+    - If accuracy >= 70% (or retry already used), branches into suggested follow-up or advances to next question.
     """
     index = state.get("current_question_index", 0)
     is_followup = state.get("is_followup", False)
     questions = state.get("questions", [])
     followups = state.get("suggested_followups", [])
+    is_passed = state.get("is_passed", False)
+    retry_count = state.get("retry_count", 0)
 
     if index >= len(questions):
         return {"interview_status": "completed"}
 
-    # If we just answered a main question, check if there's a suggested follow-up
+    # 1. If accuracy is not matched (< 70%), re-ask one more time
+    if not is_passed and retry_count < 1:
+        return {
+            "retry_count": retry_count + 1,
+            "is_reask": True,
+        }
+
+    # 2. If accuracy matched (>= 70%) OR re-ask retry was already used:
     if not is_followup:
         q = questions[index]
         q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
@@ -182,10 +276,16 @@ def process_answer_node(state: InterviewState) -> dict:
         ]
         if matching_f:
             # Transition to asking follow-up on next turn
-            return {"is_followup": True}
+            return {
+                "retry_count": 0,
+                "is_reask": False,
+                "is_followup": True,
+            }
 
     # If we just finished a follow-up (or no follow-up existed), move to next question
     return {
         "current_question_index": index + 1,
         "is_followup": False,
+        "retry_count": 0,
+        "is_reask": False,
     }
