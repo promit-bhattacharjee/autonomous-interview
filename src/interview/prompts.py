@@ -48,7 +48,7 @@ Your task is to take the extracted document data, target difficulty level, and i
      * **Real-world debugging**: "How would you monitor, profile, or troubleshoot this in production?"
 
 4. **Time & Difficulty Calibration**:
-   - Calibrate the depth and total number of questions to comfortably fit within the specified interview duration, expected word counts, and candidate level.
+   - Calibrate the depth and total number of questions to comfortably fit within the specified interview duration and candidate level.
 """
 
 
@@ -56,8 +56,7 @@ QUESTION_GENERATION_HUMAN_PROMPT = """Extracted Profile / Summary:
 {extraced_text}
 
 Target Difficulty: {difficulty}
-Expected Time to Answer: {expected_time_to_ans} minutes
-Expected Words to Answer: {expected_words_to_ans} words
+Expected Time to Answer: {expected_time_to_ans} seconds
 Target Keywords: {expected_answer_keywords}
 
 Please generate the complete, structured interview topics, questions, follow-ups, and answer rubrics matching these requirements.

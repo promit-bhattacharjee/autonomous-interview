@@ -13,17 +13,20 @@ from interview.state import InterviewState
 def route_start(state: InterviewState) -> str:
     """
     Routes execution based on whether this is an ongoing interview
-    session or the initial candidate document extraction and plan generation.
+    session, a direct-question interview, or initial candidate document extraction.
     """
     if state.get("interview_status") == "in_progress":
         return "evaluate_answer"
+    if state.get("questions"):
+        return "ask_question"
     return "extract_initial_text"
 
 
 def create_interview_graph():
     """
     Builds and compiles the turn-by-turn LangGraph interview workflow:
-    - Initial Turn: START -> extract_initial_text -> generate_questions -> ask_question -> END
+    - Direct Question Turn 1: START -> ask_question -> END
+    - Document Initial Turn: START -> extract_initial_text -> generate_questions -> ask_question -> END
     - Response Turns: START -> evaluate_answer -> process_answer -> ask_question -> END
     """
     workflow = StateGraph(InterviewState)
@@ -42,6 +45,7 @@ def create_interview_graph():
         {
             "extract_initial_text": "extract_initial_text",
             "evaluate_answer": "evaluate_answer",
+            "ask_question": "ask_question",
         },
     )
 

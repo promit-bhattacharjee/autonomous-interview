@@ -1,0 +1,20 @@
+# UK University Credibility Interview Questions & Rubrics
+
+## Topic 1: Course and University Selection
+Question: Why did you choose to study at the University of Hertfordshire in the UK, rather than continuing your studies in your home country?
+Expected Keywords: Hertfordshire, specialized modules, research facilities, international faculty, practical lab exposure, UK degree value
+Target Duration: 45 seconds
+
+Question: How does this specific master's program connect with your previous academic degree?
+Expected Keywords: computer science foundation, previous degree, programming background, advanced research, career progression
+Target Duration: 45 seconds
+
+## Topic 2: Financial Capability & Sponsorship
+Question: What are your total anticipated expenses for tuition and living accommodation in the UK, and how are these funds being sponsored?
+Expected Keywords: tuition fee, 16500 pounds, living expenses, 12500 pounds, parental savings, personal funds, 28 days rule, bank statement
+Target Duration: 60 seconds
+
+## Topic 3: Post-Study Plans & Credibility
+Question: What are your career plans upon completing your degree in the United Kingdom?
+Expected Keywords: return to home country, AI solutions architect, emerging tech industry, career advancement, local job market
+Target Duration: 45 seconds

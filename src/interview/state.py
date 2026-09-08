@@ -11,16 +11,16 @@ class InitialExtracedTextState(TypedDict):
     conofidance:float
     difficulty:str
     expected_time_to_ans:int
-    expected_words_to_ans:int
 
     
 class InitialExtracedTextOutputState(BaseModel):
     extraced_text: str = Field(description="The cleaned and structured interview text.")
-    iterations: int = Field(description="The number of iteration attempts (e.g., 1).")
-    conofidance: float = Field(description="A confidence score of the extraction between 0.0 and 1.0.")
-    difficulty: str = Field(description="The difficulty level of the interview")
-    expected_time_to_ans:int = Field(description="The expected time to answer")
-    expected_answer_keywords:List[str] = Field(description="The expected keywords should present in answer")
+    iterations: int = Field(default=1, description="The number of iteration attempts (e.g., 1).")
+    conofidance: float = Field(default=1.0, description="A confidence score of the extraction between 0.0 and 1.0.")
+    difficulty: str = Field(default="Medium", description="The difficulty level of the interview")
+    expected_time_to_ans: int = Field(default=45, description="The expected time to answer in seconds")
+    expected_total_time_to_ans: int = Field(default=45, description="The total time to answer in seconds")
+    expected_answer_keywords: List[str] = Field(default_factory=list, description="The expected keywords should present in answer")
 
 # Pydantic models for structured output
 class TopicState(BaseModel):
@@ -54,7 +54,6 @@ class QuestionListModelState(BaseModel):
     topics: List[TopicState] = Field(description="List of interview topics")
     questions: List[QuestionState] = Field(description="List of interview questions")
     suggested_followups: List[SuggestedFollowupState] = Field(description="List of suggested follow-ups")
-    expected_total_words_to_ans:int = Field(description="The total number of words to answer")
     expected_total_time_to_ans:int = Field(description="The total time to answer")
     difficulty: str = Field(description="The difficulty level of the interview")
 
@@ -90,7 +89,6 @@ class InterviewState(TypedDict, total=False):
     iterations: int
     conofidance: float
     expected_time_to_ans: int
-    expected_words_to_ans: int
     expected_answer_keywords: List[str]
 
     # Generated interview plan
@@ -100,16 +98,12 @@ class InterviewState(TypedDict, total=False):
     suggested_followups: List[SuggestedFollowupState]
     expected_total_time_to_ans: int
     difficulty: str
-    expected_total_words_to_ans: int
 
-    # Turn-by-turn tracking & routing
-    topic_id: int
-    current_topic_id: int
-    current_question_index: int
-    current_followup_index: int
-    is_followup: bool
-    is_reask: bool
-    interview_status: str
+    # Relational Active Pointers (Foreign Keys)
+    active_topic_id: Optional[int]
+    active_question_id: Optional[int]
+    active_followup_order: Optional[int]
+    interview_status: Literal["not_started", "in_progress", "completed"]
 
     # Relational evaluation history
     evaluations: List[EvaluationRecord]

@@ -6,38 +6,47 @@ from langchain_core.messages import HumanMessage
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+import os
+from pathlib import Path
 from interview.graph import interview_graph
+from interview.session_builder import (
+    build_initial_interview_payload,
+    load_question_file,
+    load_student_profile,
+)
 
 
 def main():
     print("=" * 65)
-    print("      AI TECHNICAL INTERVIEWER -- LIVE TURN-BY-TURN RUNNER      ")
+    print("   AI UK CREDIBILITY & ACADEMIC INTERVIEWER -- TERMINAL RUNNER   ")
     print("=" * 65)
 
-    # 1. Candidate Profile / Material
-    sample_candidate_data = {
-        "extraced_text": (
-            "Candidate applying for Master's in Computer Science at University of Southern California (USC), USA. "
-            "Background: BSc in Software Engineering with 3.7 GPA, IELTS 7.5. "
-            "Sponsor: Self and parents with savings of $70,000. "
-            "Career Goal: Return to home country as an AI/ML Engineer."
-        ),
-        "difficulty": "Medium",
-        "expected_time_to_ans": 30,
-        "expected_words_to_ans": 1000,
-        "iterations": 1,
-        "conofidance": 1.0,
-        "expected_answer_keywords": ["Machine Learning", "Software Architecture", "USC", "Goals"],
-    }
+    base_dir = Path(__file__).resolve().parent
+    question_path = base_dir / "data" / "questions" / "uk_credibility_questions.txt"
+    student_path = base_dir / "data" / "students" / "sample_student.json"
 
-    session_id = f"interview-{uuid.uuid4().hex[:8]}"
+    print(f"\n[1] Ingesting Admin Question File: {question_path.name}")
+    question_content = load_question_file(str(question_path))
+
+    print(f"[2] Ingesting Student Profile Data: {student_path.name}")
+    student_data = load_student_profile(str(student_path))
+    print(f"    - Student: {student_data.get('full_name')} (Target: {student_data.get('target_university')})")
+
+    # Merge student profile + question file into initial payload
+    interview_payload = build_initial_interview_payload(
+        student_data=student_data,
+        question_content=question_content,
+        difficulty="Medium",
+    )
+
+    session_id = f"uk-interview-{uuid.uuid4().hex[:8]}"
     config = {"configurable": {"thread_id": session_id}}
 
-    print("\n[+] Initializing interview and generating customized question plan...")
+    print("\n[+] Initializing interview and generating customized question rubric...")
     print(f"[+] Session Thread ID: {session_id}")
 
     # Turn 1: Process document, generate question rubric, formulate and ask Question 1
-    state = interview_graph.invoke(sample_candidate_data, config=config)
+    state = interview_graph.invoke(interview_payload, config=config)
 
     topics_count = len(state.get("topics", []))
     questions_count = len(state.get("questions", []))
@@ -76,11 +85,12 @@ def main():
 
         evals = state.get("evaluations", [])
         latest_eval = evals[-1] if evals else None
-        is_reask = state.get("is_reask", False)
+        is_reask = bool(latest_eval.attempt_number == 1 and not latest_eval.is_passed) if latest_eval else False
         if latest_eval is not None:
             status_label = "PASSED (>= 70%)" if latest_eval.is_passed else "BELOW THRESHOLD (< 70%)"
-            action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding..."
+            action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding to next question..."
             print(f"\n📊 [Accuracy Check]: {latest_eval.accuracy_score:.1f}% (Attempt {latest_eval.attempt_number}) | {status_label} {action_label}")
+            print(f"   [Relational IDs]: Topic ID: {latest_eval.topic_id} | Question ID: {latest_eval.question_id}")
             if latest_eval.matched_keywords:
                 print(f"   ✅ Matched: {', '.join(latest_eval.matched_keywords)}")
             if latest_eval.unmatched_keywords:
