@@ -61,25 +61,27 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
     structured_llm = llm.with_structured_output(QuestionListModelState)
     result: QuestionListModelState = structured_llm.invoke(messages)
 
-    result_dict = result.model_dump()
-    result_dict["current_question_index"] = 0
-    result_dict["is_followup"] = False
-    result_dict["interview_status"] = "in_progress"
-    result_dict["retry_count"] = 0
-    result_dict["is_reask"] = False
-    result_dict["last_accuracy"] = 0.0
-    result_dict["is_passed"] = False
-    result_dict["matched_keywords"] = []
-    result_dict["unmatched_keywords"] = []
+    first_topic_id = result.topics[0].id if result.topics else None
 
-    first_topic_id = None
-    if result_dict.get("topics"):
-        t0 = result_dict["topics"][0]
-        first_topic_id = t0.id if hasattr(t0, "id") else t0.get("id")
-    result_dict["topic_id"] = first_topic_id
-    result_dict["current_topic_id"] = first_topic_id
-
-    return result_dict
+    return {
+        "topics": result.topics,
+        "questions": result.questions,
+        "suggested_followups": result.suggested_followups,
+        "expected_total_words_to_ans": result.expected_total_words_to_ans,
+        "expected_total_time_to_ans": result.expected_total_time_to_ans,
+        "difficulty": result.difficulty,
+        "current_question_index": 0,
+        "is_followup": False,
+        "interview_status": "in_progress",
+        "retry_count": 0,
+        "is_reask": False,
+        "last_accuracy": 0.0,
+        "is_passed": False,
+        "matched_keywords": [],
+        "unmatched_keywords": [],
+        "topic_id": first_topic_id,
+        "current_topic_id": first_topic_id,
+    }
 
 
 def _ensure_text_content(msg: AIMessage) -> AIMessage:
@@ -124,32 +126,27 @@ def evaluate_answer_node(state: InterviewState) -> dict:
         }
 
     q = questions[index]
-    q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
-    q_tid = q.topic_id if hasattr(q, "topic_id") else q.get("topic_id")
+    q_id = q.question_id
+    q_tid = q.topic_id
 
     # Locate topic name
     topic_name = "Technical Proficiency"
     for t in state.get("topics", []):
-        t_id = t.id if hasattr(t, "id") else t.get("id")
-        if t_id == q_tid:
-            topic_name = t.name if hasattr(t, "name") else t.get("name", "")
+        if t.id == q_tid:
+            topic_name = t.name
             break
 
     # Determine keywords and context based on whether this is a follow-up or main question
     if is_followup:
         followups = state.get("suggested_followups", [])
-        matching_f = [
-            f for f in followups
-            if (f.question_id if hasattr(f, "question_id") else f.get("question_id")) == q_id
-        ]
+        matching_f = [f for f in followups if f.question_id == q_id]
         if matching_f:
-            f = matching_f[0]
-            keywords_list = f.expected_answer_keywords if hasattr(f, "expected_answer_keywords") else f.get("expected_answer_keywords", [])
+            keywords_list = matching_f[0].expected_answer_keywords
         else:
-            keywords_list = q.expected_answer_keywords if hasattr(q, "expected_answer_keywords") else q.get("expected_answer_keywords", [])
+            keywords_list = q.expected_answer_keywords
         context_type = "Follow-up Question"
     else:
-        keywords_list = q.expected_answer_keywords if hasattr(q, "expected_answer_keywords") else q.get("expected_answer_keywords", [])
+        keywords_list = q.expected_answer_keywords
         context_type = "Main Question"
 
     prompt_content = ANSWER_EVALUATION_HUMAN_PROMPT.format(
@@ -201,32 +198,26 @@ def ask_question_node(state: InterviewState) -> dict:
         }
 
     q = questions[index]
-    q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
-    q_tid = q.topic_id if hasattr(q, "topic_id") else q.get("topic_id")
+    q_id = q.question_id
+    q_tid = q.topic_id
 
     # Locate topic name
     topic_name = "Technical Proficiency"
     for t in state.get("topics", []):
-        t_id = t.id if hasattr(t, "id") else t.get("id")
-        if t_id == q_tid:
-            topic_name = t.name if hasattr(t, "name") else t.get("name", "")
+        if t.id == q_tid:
+            topic_name = t.name
             break
 
     # Determine question or follow-up text
     if is_followup:
         followups = state.get("suggested_followups", [])
-        matching_f = [
-            f for f in followups
-            if (f.question_id if hasattr(f, "question_id") else f.get("question_id")) == q_id
-        ]
+        matching_f = [f for f in followups if f.question_id == q_id]
         if matching_f:
-            f = matching_f[0]
-            question_to_ask = f.followup if hasattr(f, "followup") else f.get("followup", "")
+            question_to_ask = matching_f[0].followup
         else:
-            q_text = q.question if hasattr(q, "question") else q.get("question", "")
-            question_to_ask = q_text
+            question_to_ask = q.question
     else:
-        question_to_ask = q.question if hasattr(q, "question") else q.get("question", "")
+        question_to_ask = q.question
 
     prompt_content = INTERVIEW_QUESTION_PROMPT.format(
         topic_name=topic_name,
@@ -286,11 +277,8 @@ def process_answer_node(state: InterviewState) -> dict:
     # 2. If accuracy matched (>= 70%) OR re-ask retry was already used:
     if not is_followup:
         q = questions[index]
-        q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
-        matching_f = [
-            f for f in followups
-            if (f.question_id if hasattr(f, "question_id") else f.get("question_id")) == q_id
-        ]
+        q_id = q.question_id
+        matching_f = [f for f in followups if f.question_id == q_id]
         if matching_f:
             # Transition to asking follow-up on next turn
             return {
