@@ -106,6 +106,7 @@ class InterviewState(TypedDict, total=False):
     topic_id: int
     current_topic_id: int
     current_question_index: int
+    current_followup_index: int
     is_followup: bool
     is_reask: bool
     interview_status: str

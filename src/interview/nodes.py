@@ -21,8 +21,10 @@ from interview.state import (
 from interview.tools.question_helpers import (
     get_active_turn_target,
     get_current_followup,
+    get_current_question,
     get_evaluations_for_turn,
     get_latest_evaluation,
+    get_question_followups,
     is_followup_turn,
 )
 
@@ -36,28 +38,32 @@ def extract_initial_text(state: InitialExtracedTextState) -> dict:
 
     messages = [
         SystemMessage(content=DOCUMENT_EXTRACTION_PROMPT),
-        HumanMessage(content=f"Document / Material to analyze:\n{raw_material}"),
+        HumanMessage(content=f"Document Text:\n{raw_material}"),
     ]
 
     llm = get_llm(model_name="gemini-3.6-flash", model_provider="google_genai")
     structured_llm = llm.with_structured_output(InitialExtracedTextOutputState)
     result: InitialExtracedTextOutputState = structured_llm.invoke(messages)
 
-    return result.model_dump()
+    return {
+        "extraced_text": result.extraced_text,
+        "difficulty": result.difficulty,
+        "expected_total_words_to_ans": result.expected_total_words_to_ans,
+        "expected_total_time_to_ans": result.expected_total_time_to_ans,
+        "iterations": 0,
+    }
 
 
-def generate_questions_node(state: InitialExtracedTextState) -> dict:
+def generate_questions_node(state: InterviewState) -> dict:
     """
-    Consumes the extracted text, difficulty, and duration requirements from InitialExtracedTextState,
-    formats the prompt via QUESTION_GENERATION_HUMAN_PROMPT, generates the structured interview plan,
-    and initializes turn-by-turn tracking in InterviewState.
+    Takes the extracted information, difficulty, and time from state,
+    and generates topics, questions, and suggested follow-ups.
     """
     human_content = QUESTION_GENERATION_HUMAN_PROMPT.format(
         extraced_text=state.get("extraced_text", ""),
         difficulty=state.get("difficulty", "Medium"),
-        expected_time_to_ans=state.get("expected_time_to_ans", 30),
-        expected_words_to_ans=state.get("expected_words_to_ans", 1000),
-        expected_answer_keywords=",".join(state.get("expected_answer_keywords", [])),
+        expected_time_to_ans=state.get("expected_total_time_to_ans", 30),
+        expected_words_to_ans=state.get("expected_total_words_to_ans", 300),
     )
 
     messages = [
@@ -79,6 +85,7 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
         "expected_total_time_to_ans": result.expected_total_time_to_ans,
         "difficulty": result.difficulty,
         "current_question_index": 0,
+        "current_followup_index": 0,
         "is_followup": False,
         "is_reask": False,
         "interview_status": "in_progress",
@@ -147,14 +154,17 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     is_followup = is_followup_turn(state)
     followup_obj = get_current_followup(state) if is_followup else None
     turn_type = "suggested_followup" if is_followup else "question"
+    followup_order = followup_obj.followup_order if followup_obj else None
 
-    prior_evals = get_evaluations_for_turn(state, q.question_id, turn_type)
+    prior_evals = get_evaluations_for_turn(
+        state, q.question_id, turn_type, followup_order=followup_order
+    )
     attempt_number = len(prior_evals) + 1
 
     record = EvaluationRecord(
         topic_id=q_tid,
         question_id=q.question_id,
-        followup_order=followup_obj.followup_order if followup_obj else None,
+        followup_order=followup_order,
         turn_type=turn_type,
         attempt_number=attempt_number,
         accuracy_score=float(result.accuracy_score),
@@ -247,7 +257,10 @@ def process_answer_node(state: InterviewState) -> dict:
     Candidate response routing turn:
     Consumes evaluation results from relational evaluation records.
     - If accuracy < 70% and this was the 1st attempt, triggers a re-ask of the same question/followup.
-    - If accuracy >= 70% (or 2nd attempt completed), branches into suggested follow-up or advances to next question.
+    - If accuracy >= 70% (or 2nd attempt completed):
+      - If on main question and follow-ups exist: branch to 1st follow-up (current_followup_index = 0).
+      - If on a follow-up and more follow-ups remain: advance to next follow-up (current_followup_index += 1).
+      - Otherwise: advance to next main question (current_question_index += 1, current_followup_index = 0, is_followup = False).
     """
     index = state.get("current_question_index", 0)
     questions = state.get("questions", [])
@@ -255,6 +268,7 @@ def process_answer_node(state: InterviewState) -> dict:
     if index >= len(questions):
         return {"interview_status": "completed"}
 
+    current_q = questions[index]
     latest_eval = get_latest_evaluation(state)
 
     # 1. If accuracy is below threshold (< 70%) and this was the 1st attempt, re-ask once
@@ -264,16 +278,31 @@ def process_answer_node(state: InterviewState) -> dict:
         }
 
     # 2. If accuracy passed (>= 70%) OR retry was already used (attempt >= 2):
-    # If currently on a main question and a follow-up exists, branch to follow-up
-    if not is_followup_turn(state) and get_current_followup(state):
-        return {
-            "is_reask": False,
-            "is_followup": True,
-        }
+    q_followups = get_question_followups(state, current_q.question_id)
+    f_idx = state.get("current_followup_index", 0)
 
-    # If we just finished a follow-up (or no follow-up existed), move to next question
+    if not is_followup_turn(state):
+        # Just finished main question: start follow-up sequence if follow-ups exist
+        if q_followups:
+            return {
+                "is_reask": False,
+                "is_followup": True,
+                "current_followup_index": 0,
+            }
+    else:
+        # Just finished a follow-up: check if more follow-ups remain for this question
+        if f_idx + 1 < len(q_followups):
+            return {
+                "is_reask": False,
+                "is_followup": True,
+                "current_followup_index": f_idx + 1,
+            }
+
+    # If all follow-ups for this question are finished (or question had no follow-ups),
+    # advance to the next main question
     return {
         "current_question_index": index + 1,
+        "current_followup_index": 0,
         "is_followup": False,
         "is_reask": False,
     }

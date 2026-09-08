@@ -1,10 +1,12 @@
 from interview.tools.question_helpers import (
     get_active_turn_target,
     get_current_followup,
+    get_current_question,
     get_evaluations_for_followup,
     get_evaluations_for_question,
     get_evaluations_for_turn,
     get_latest_evaluation,
+    get_question_followups,
     get_topic_evaluations,
     get_topic_score,
     is_followup_turn,
@@ -13,12 +15,13 @@ from interview.tools.question_helpers import (
 __all__ = [
     "get_active_turn_target",
     "get_current_followup",
+    "get_current_question",
     "get_evaluations_for_followup",
     "get_evaluations_for_question",
     "get_evaluations_for_turn",
     "get_latest_evaluation",
+    "get_question_followups",
     "get_topic_evaluations",
     "get_topic_score",
     "is_followup_turn",
 ]
-

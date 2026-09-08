@@ -5,19 +5,44 @@ from typing import List, Optional, Tuple
 from interview.state import EvaluationRecord, InterviewState, QuestionState, SuggestedFollowupState
 
 
-def get_current_followup(state: InterviewState) -> Optional[SuggestedFollowupState]:
+def get_current_question(state: InterviewState) -> Optional[QuestionState]:
     """
-    Retrieves the matching SuggestedFollowupState for the active main question.
-    Returns None if all questions are finished or no follow-up exists for this question.
+    Retrieves the active QuestionState for the current question index.
+    Returns None if all questions are completed.
     """
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
-    if index >= len(questions):
+    if 0 <= index < len(questions):
+        return questions[index]
+    return None
+
+
+def get_question_followups(state: InterviewState, question_id: int) -> List[SuggestedFollowupState]:
+    """
+    Retrieves all SuggestedFollowupState objects for a given question_id,
+    sorted sequentially by followup_order.
+    """
+    return sorted(
+        [f for f in state.get("suggested_followups", []) if f.question_id == question_id],
+        key=lambda f: f.followup_order,
+    )
+
+
+def get_current_followup(state: InterviewState) -> Optional[SuggestedFollowupState]:
+    """
+    Retrieves the active SuggestedFollowupState for the active main question
+    according to current_followup_index.
+    Returns None if all questions are finished or no follow-up exists at this index.
+    """
+    current_q = get_current_question(state)
+    if not current_q:
         return None
 
-    current_q = questions[index]
-    followups = state.get("suggested_followups", [])
-    return next((f for f in followups if f.question_id == current_q.question_id), None)
+    followups = get_question_followups(state, current_q.question_id)
+    f_idx = state.get("current_followup_index", 0)
+    if 0 <= f_idx < len(followups):
+        return followups[f_idx]
+    return None
 
 
 def is_followup_turn(state: InterviewState) -> bool:
@@ -39,22 +64,20 @@ def get_active_turn_target(state: InterviewState) -> Tuple[str, List[str], str]:
         tuple of (question_text, expected_keywords, context_type)
         where context_type is 'Follow-up Question' or 'Main Question'.
     """
-    questions = state.get("questions", [])
-    index = state.get("current_question_index", 0)
-    if index >= len(questions):
+    current_q = get_current_question(state)
+    if not current_q:
         return ("", [], "Completed")
-
-    current_q = questions[index]
 
     if is_followup_turn(state):
         followup = get_current_followup(state)
         if followup:
-            return (followup.followup, followup.expected_answer_keywords, "Follow-up Question")
+            label = f"Follow-up Question #{followup.followup_order}"
+            return (followup.followup, followup.expected_answer_keywords, label)
 
     return (current_q.question, current_q.expected_answer_keywords, "Main Question")
 
 
-def get_evaluations_for_question(state: InterviewState, question_id: int) -> List["EvaluationRecord"]:
+def get_evaluations_for_question(state: InterviewState, question_id: int) -> List[EvaluationRecord]:
     """Retrieves all evaluations for a specific main question."""
     return [
         e for e in state.get("evaluations", [])
@@ -62,15 +85,19 @@ def get_evaluations_for_question(state: InterviewState, question_id: int) -> Lis
     ]
 
 
-def get_evaluations_for_followup(state: InterviewState, question_id: int) -> List["EvaluationRecord"]:
+def get_evaluations_for_followup(
+    state: InterviewState, question_id: int, followup_order: Optional[int] = None
+) -> List[EvaluationRecord]:
     """Retrieves all evaluations for a specific suggested follow-up."""
     return [
         e for e in state.get("evaluations", [])
-        if e.question_id == question_id and e.turn_type == "suggested_followup"
+        if e.question_id == question_id
+        and e.turn_type == "suggested_followup"
+        and (followup_order is None or e.followup_order == followup_order)
     ]
 
 
-def get_topic_evaluations(state: InterviewState, topic_id: int) -> List["EvaluationRecord"]:
+def get_topic_evaluations(state: InterviewState, topic_id: int) -> List[EvaluationRecord]:
     """Retrieves all evaluation records for a specific topic."""
     return [
         e for e in state.get("evaluations", [])
@@ -93,11 +120,15 @@ def get_latest_evaluation(state: InterviewState) -> Optional[EvaluationRecord]:
 
 
 def get_evaluations_for_turn(
-    state: InterviewState, question_id: int, turn_type: str
+    state: InterviewState,
+    question_id: int,
+    turn_type: str,
+    followup_order: Optional[int] = None,
 ) -> List[EvaluationRecord]:
     """Retrieves evaluations for a specific question/follow-up turn."""
     return [
         e for e in state.get("evaluations", [])
-        if e.question_id == question_id and e.turn_type == turn_type
+        if e.question_id == question_id
+        and e.turn_type == turn_type
+        and (followup_order is None or e.followup_order == followup_order)
     ]
-
