@@ -62,8 +62,8 @@ class QuestionListModelState(BaseModel):
 class AnswerAccuracyEvaluation(BaseModel):
     accuracy_score: float = Field(description="Accuracy score between 0.0 and 100.0 based on keyword and conceptual coverage")
     is_passed: bool = Field(description="True if accuracy_score >= 70.0, False otherwise")
-    matched_keywords: List[str] = Field(description="Keywords from expected_answer_keywords covered in candidate answer")
-    missing_keywords: List[str] = Field(description="Keywords from expected_answer_keywords missed or inadequately addressed")
+    matched_keywords: List[str] = Field(default_factory=list, description="Keywords from expected_answer_keywords covered in candidate answer")
+    unmatched_keywords: List[str] = Field(default_factory=list, description="Keywords from expected_answer_keywords that were unmatched or missed in candidate answer")
     feedback: str = Field(description="Brief assessment of candidate response against expected keywords")
 
 
@@ -96,5 +96,7 @@ class InterviewState(TypedDict, total=False):
     # Answer accuracy evaluation & retry tracking
     last_accuracy: float
     is_passed: bool
+    matched_keywords: List[str]
+    unmatched_keywords: List[str]
     retry_count: int
     is_reask: bool

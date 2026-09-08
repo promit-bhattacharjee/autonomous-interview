@@ -69,6 +69,8 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
     result_dict["is_reask"] = False
     result_dict["last_accuracy"] = 0.0
     result_dict["is_passed"] = False
+    result_dict["matched_keywords"] = []
+    result_dict["unmatched_keywords"] = []
 
     first_topic_id = None
     if result_dict.get("topics"):
@@ -95,20 +97,31 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     """
     Evaluates candidate's latest response against the interviewer's prompt,
     the active topic, and target expected_answer_keywords (checking >= 70% threshold).
+    Tracks matched and unmatched keywords.
     """
     messages_list = state.get("messages", [])
     last_ai_msg = next((m for m in reversed(messages_list) if isinstance(m, AIMessage)), None)
     last_human_msg = next((m for m in reversed(messages_list) if isinstance(m, HumanMessage)), None)
 
     if not last_human_msg:
-        return {"last_accuracy": 100.0, "is_passed": True}
+        return {
+            "last_accuracy": 100.0,
+            "is_passed": True,
+            "matched_keywords": [],
+            "unmatched_keywords": [],
+        }
 
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
     is_followup = state.get("is_followup", False)
 
     if index >= len(questions):
-        return {"last_accuracy": 100.0, "is_passed": True}
+        return {
+            "last_accuracy": 100.0,
+            "is_passed": True,
+            "matched_keywords": [],
+            "unmatched_keywords": [],
+        }
 
     q = questions[index]
     q_id = q.question_id if hasattr(q, "question_id") else q.get("question_id")
@@ -159,6 +172,8 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     return {
         "last_accuracy": float(result.accuracy_score),
         "is_passed": bool(result.is_passed),
+        "matched_keywords": result.matched_keywords,
+        "unmatched_keywords": result.unmatched_keywords,
     }
 
 
@@ -171,6 +186,7 @@ def ask_question_node(state: InterviewState) -> dict:
     index = state.get("current_question_index", 0)
     is_followup = state.get("is_followup", False)
     is_reask = state.get("is_reask", False)
+    unmatched_keywords = state.get("unmatched_keywords", [])
 
     # Check if all questions are completed
     if index >= len(questions):
@@ -217,13 +233,14 @@ def ask_question_node(state: InterviewState) -> dict:
         question_text=question_to_ask,
         is_followup="Yes" if is_followup else "No",
         is_reask="Yes" if is_reask else "No",
+        unmatched_keywords=", ".join(unmatched_keywords) if unmatched_keywords else "None",
     )
 
     history = state.get("messages", [])[-2:] if state.get("messages") else []
     if is_reask:
         request_instruction = (
             "The candidate's previous answer missed some key technical details or scored below the required threshold. "
-            "Please politely acknowledge their previous response and re-ask or prompt them to elaborate on this question."
+            "Please politely acknowledge their previous response and re-ask or prompt them to elaborate on the question."
         )
     elif is_followup:
         request_instruction = "Please ask the candidate this follow-up question naturally."
@@ -280,6 +297,8 @@ def process_answer_node(state: InterviewState) -> dict:
                 "retry_count": 0,
                 "is_reask": False,
                 "is_followup": True,
+                "matched_keywords": [],
+                "unmatched_keywords": [],
             }
 
     # If we just finished a follow-up (or no follow-up existed), move to next question
@@ -288,4 +307,6 @@ def process_answer_node(state: InterviewState) -> dict:
         "is_followup": False,
         "retry_count": 0,
         "is_reask": False,
+        "matched_keywords": [],
+        "unmatched_keywords": [],
     }

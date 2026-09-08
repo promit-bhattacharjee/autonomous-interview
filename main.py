@@ -81,6 +81,12 @@ def main():
             status_label = "PASSED (>= 70%)" if passed else "BELOW THRESHOLD (< 70%)"
             action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding..."
             print(f"\n📊 [Accuracy Check]: {acc:.1f}% | {status_label} {action_label}")
+            matched = state.get("matched_keywords", [])
+            unmatched = state.get("unmatched_keywords", [])
+            if matched:
+                print(f"   ✅ Matched: {', '.join(matched)}")
+            if unmatched:
+                print(f"   ❌ Unmatched: {', '.join(unmatched)}")
 
         messages = state.get("messages", [])
         if messages:

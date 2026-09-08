@@ -78,10 +78,11 @@ Current Topic: {topic_name}
 Question to Ask: {question_text}
 Is Follow-up: {is_followup}
 Is Re-ask: {is_reask}
+Unmatched Key Concepts: {unmatched_keywords}
 
 Instructions:
 - Speak directly to the candidate in a natural, engaging, and professional interviewer tone.
-- If this is a re-ask (Is Re-ask: Yes), politely acknowledge the candidate's prior response and prompt them to elaborate, clarify, or provide deeper technical detail on this question.
+- If this is a re-ask (Is Re-ask: Yes), politely acknowledge the candidate's prior response and prompt them to elaborate, clarify, or provide deeper technical detail specifically addressing the areas they missed without giving away the exact answers.
 - If this is a follow-up, briefly refer back to the conversation before asking.
 - If transitioning to a new topic, briefly introduce the topic.
 - Do NOT answer the question or reveal evaluation criteria. Ask the question clearly and invite their response.
@@ -112,7 +113,7 @@ Your task is to evaluate the candidate's latest response against the interviewer
    - Set `is_passed = False` if `accuracy_score < 70.0`.
 4. **Identify Keywords**:
    - `matched_keywords`: The specific target keywords or concepts the candidate successfully addressed.
-   - `missing_keywords`: The target keywords or concepts that were omitted or insufficiently explained.
+   - `unmatched_keywords`: The target keywords or concepts that were unmatched, omitted, or insufficiently explained.
 5. **Feedback**:
    - Provide a 1-2 sentence concise, objective technical assessment.
 """
