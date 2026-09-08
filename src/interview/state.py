@@ -80,7 +80,7 @@ class EvaluationRecord(BaseModel):
     is_passed: bool = Field(description="True if accuracy_score >= 70.0, False otherwise")
     matched_keywords: List[str] = Field(default_factory=list, description="Keywords covered in candidate answer")
     unmatched_keywords: List[str] = Field(default_factory=list, description="Keywords that were unmatched or missed")
-    feedback: str = Field(description="Brief constructive evaluation")
+    feedback: str = Field(default="", description="Brief constructive evaluation")
 
 
 # LangGraph state
@@ -107,15 +107,8 @@ class InterviewState(TypedDict, total=False):
     current_topic_id: int
     current_question_index: int
     is_followup: bool
-    interview_status: str
-
-    # Answer accuracy evaluation & retry tracking
-    last_accuracy: float
-    is_passed: bool
-    matched_keywords: List[str]
-    unmatched_keywords: List[str]
-    retry_count: int
     is_reask: bool
+    interview_status: str
 
     # Relational evaluation history
     evaluations: List[EvaluationRecord]

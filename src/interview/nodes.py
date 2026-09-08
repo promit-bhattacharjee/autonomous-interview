@@ -21,6 +21,8 @@ from interview.state import (
 from interview.tools.question_helpers import (
     get_active_turn_target,
     get_current_followup,
+    get_evaluations_for_turn,
+    get_latest_evaluation,
     is_followup_turn,
 )
 
@@ -78,13 +80,8 @@ def generate_questions_node(state: InitialExtracedTextState) -> dict:
         "difficulty": result.difficulty,
         "current_question_index": 0,
         "is_followup": False,
-        "interview_status": "in_progress",
-        "retry_count": 0,
         "is_reask": False,
-        "last_accuracy": 0.0,
-        "is_passed": False,
-        "matched_keywords": [],
-        "unmatched_keywords": [],
+        "interview_status": "in_progress",
         "evaluations": [],
         "topic_id": first_topic_id,
         "current_topic_id": first_topic_id,
@@ -112,26 +109,11 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     last_ai_msg = next((m for m in reversed(messages_list) if isinstance(m, AIMessage)), None)
     last_human_msg = next((m for m in reversed(messages_list) if isinstance(m, HumanMessage)), None)
 
-    if not last_human_msg:
-        return {
-            "last_accuracy": 100.0,
-            "is_passed": True,
-            "matched_keywords": [],
-            "unmatched_keywords": [],
-        }
+    if not last_human_msg or state.get("current_question_index", 0) >= len(state.get("questions", [])):
+        return {}
 
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
-    is_followup = state.get("is_followup", False)
-
-    if index >= len(questions):
-        return {
-            "last_accuracy": 100.0,
-            "is_passed": True,
-            "matched_keywords": [],
-            "unmatched_keywords": [],
-        }
-
     q = questions[index]
     q_tid = q.topic_id
 
@@ -164,13 +146,17 @@ def evaluate_answer_node(state: InterviewState) -> dict:
 
     is_followup = is_followup_turn(state)
     followup_obj = get_current_followup(state) if is_followup else None
+    turn_type = "suggested_followup" if is_followup else "question"
+
+    prior_evals = get_evaluations_for_turn(state, q.question_id, turn_type)
+    attempt_number = len(prior_evals) + 1
 
     record = EvaluationRecord(
         topic_id=q_tid,
         question_id=q.question_id,
         followup_order=followup_obj.followup_order if followup_obj else None,
-        turn_type="suggested_followup" if is_followup else "question",
-        attempt_number=state.get("retry_count", 0) + 1,
+        turn_type=turn_type,
+        attempt_number=attempt_number,
         accuracy_score=float(result.accuracy_score),
         is_passed=bool(result.is_passed),
         matched_keywords=result.matched_keywords,
@@ -182,10 +168,6 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     current_evaluations.append(record)
 
     return {
-        "last_accuracy": float(result.accuracy_score),
-        "is_passed": bool(result.is_passed),
-        "matched_keywords": result.matched_keywords,
-        "unmatched_keywords": result.unmatched_keywords,
         "evaluations": current_evaluations,
     }
 
@@ -198,7 +180,10 @@ def ask_question_node(state: InterviewState) -> dict:
     questions = state.get("questions", [])
     index = state.get("current_question_index", 0)
     is_reask = state.get("is_reask", False)
-    unmatched_keywords = state.get("unmatched_keywords", [])
+
+    # Retrieve unmatched keywords from the latest evaluation if this turn is a re-ask
+    latest_eval = get_latest_evaluation(state)
+    unmatched_keywords = latest_eval.unmatched_keywords if (latest_eval and is_reask) else []
 
     # Check if all questions are completed
     if index >= len(questions):
@@ -260,42 +245,35 @@ def ask_question_node(state: InterviewState) -> dict:
 def process_answer_node(state: InterviewState) -> dict:
     """
     Candidate response routing turn:
-    Consumes evaluation results.
-    - If accuracy < 70% and not yet re-asked, triggers a re-ask of the same question/followup.
-    - If accuracy >= 70% (or retry already used), branches into suggested follow-up or advances to next question.
+    Consumes evaluation results from relational evaluation records.
+    - If accuracy < 70% and this was the 1st attempt, triggers a re-ask of the same question/followup.
+    - If accuracy >= 70% (or 2nd attempt completed), branches into suggested follow-up or advances to next question.
     """
     index = state.get("current_question_index", 0)
     questions = state.get("questions", [])
-    is_passed = state.get("is_passed", False)
-    retry_count = state.get("retry_count", 0)
 
     if index >= len(questions):
         return {"interview_status": "completed"}
 
-    # 1. If accuracy is not matched (< 70%), re-ask one more time
-    if not is_passed and retry_count < 1:
+    latest_eval = get_latest_evaluation(state)
+
+    # 1. If accuracy is below threshold (< 70%) and this was the 1st attempt, re-ask once
+    if latest_eval and not latest_eval.is_passed and latest_eval.attempt_number == 1:
         return {
-            "retry_count": retry_count + 1,
             "is_reask": True,
         }
 
-    # 2. If accuracy matched (>= 70%) OR re-ask retry was already used:
+    # 2. If accuracy passed (>= 70%) OR retry was already used (attempt >= 2):
     # If currently on a main question and a follow-up exists, branch to follow-up
     if not is_followup_turn(state) and get_current_followup(state):
         return {
-            "retry_count": 0,
             "is_reask": False,
             "is_followup": True,
-            "matched_keywords": [],
-            "unmatched_keywords": [],
         }
 
     # If we just finished a follow-up (or no follow-up existed), move to next question
     return {
         "current_question_index": index + 1,
         "is_followup": False,
-        "retry_count": 0,
         "is_reask": False,
-        "matched_keywords": [],
-        "unmatched_keywords": [],
     }

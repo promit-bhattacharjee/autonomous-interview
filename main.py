@@ -74,19 +74,17 @@ def main():
             config=config,
         )
 
-        acc = state.get("last_accuracy")
-        passed = state.get("is_passed")
-        is_reask = state.get("is_reask")
-        if acc is not None:
-            status_label = "PASSED (>= 70%)" if passed else "BELOW THRESHOLD (< 70%)"
+        evals = state.get("evaluations", [])
+        latest_eval = evals[-1] if evals else None
+        is_reask = state.get("is_reask", False)
+        if latest_eval is not None:
+            status_label = "PASSED (>= 70%)" if latest_eval.is_passed else "BELOW THRESHOLD (< 70%)"
             action_label = "-> Re-asking question one more time..." if is_reask else "-> Proceeding..."
-            print(f"\n📊 [Accuracy Check]: {acc:.1f}% | {status_label} {action_label}")
-            matched = state.get("matched_keywords", [])
-            unmatched = state.get("unmatched_keywords", [])
-            if matched:
-                print(f"   ✅ Matched: {', '.join(matched)}")
-            if unmatched:
-                print(f"   ❌ Unmatched: {', '.join(unmatched)}")
+            print(f"\n📊 [Accuracy Check]: {latest_eval.accuracy_score:.1f}% (Attempt {latest_eval.attempt_number}) | {status_label} {action_label}")
+            if latest_eval.matched_keywords:
+                print(f"   ✅ Matched: {', '.join(latest_eval.matched_keywords)}")
+            if latest_eval.unmatched_keywords:
+                print(f"   ❌ Unmatched: {', '.join(latest_eval.unmatched_keywords)}")
 
         messages = state.get("messages", [])
         if messages:

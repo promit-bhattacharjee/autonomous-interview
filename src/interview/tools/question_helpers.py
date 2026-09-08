@@ -84,3 +84,20 @@ def get_topic_score(state: InterviewState, topic_id: int) -> float:
     if not evals:
         return 0.0
     return sum(e.accuracy_score for e in evals) / len(evals)
+
+
+def get_latest_evaluation(state: InterviewState) -> Optional[EvaluationRecord]:
+    """Retrieves the most recent evaluation record from state."""
+    evals = state.get("evaluations", [])
+    return evals[-1] if evals else None
+
+
+def get_evaluations_for_turn(
+    state: InterviewState, question_id: int, turn_type: str
+) -> List[EvaluationRecord]:
+    """Retrieves evaluations for a specific question/follow-up turn."""
+    return [
+        e for e in state.get("evaluations", [])
+        if e.question_id == question_id and e.turn_type == turn_type
+    ]
+
