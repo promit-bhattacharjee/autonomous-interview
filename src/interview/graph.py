@@ -1,3 +1,4 @@
+from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from interview.nodes import (
@@ -12,26 +13,26 @@ from interview.state import InterviewState
 
 def route_start(state: InterviewState) -> str:
     """
-    Routes execution based on whether this is an ongoing interview session,
-    direct questions, or dynamic question generation.
+    Routes the initial turn entry:
+    - If interview is already completed and needs final evaluation synthesis: generate_final_evaluation
+    - If interview is completed and already evaluated: END
+    - If interview is in progress: evaluate_answer
+    - If questions already exist: ask_question
+    - Otherwise: generate_questions
     """
     if state.get("interview_status") == "completed" and not state.get("final_evaluation"):
         return "generate_final_evaluation"
+    if state.get("interview_status") == "completed":
+        return END
     if state.get("interview_status") == "in_progress":
         return "evaluate_answer"
-    if state.get("questions"):
+    if state.get("topics") or state.get("questions"):
         return "ask_question"
     return "generate_questions"
 
 
-def route_after_generate(state: InterviewState) -> str:
-    """
-    If question generation was terminated due to missing data, route directly to END.
-    Otherwise proceed to ask_question.
-    """
-    if state.get("interview_status") == "completed":
-        return END
-    return "ask_question"
+# Backward compatibility alias
+route_after_init = route_start
 
 
 def route_after_ask(state: InterviewState) -> str:
@@ -47,7 +48,7 @@ def route_after_ask(state: InterviewState) -> str:
 def create_interview_graph():
     """
     Builds and compiles the turn-by-turn LangGraph interview workflow:
-    - Session Init: START -> generate_questions -> [ask_question or END if terminated]
+    - Initial Question Generation: START -> generate_questions -> ask_question -> END
     - Active Response Turns: START -> evaluate_answer -> process_answer -> ask_question -> [END or generate_final_evaluation]
     - Interview Concluded: ask_question -> generate_final_evaluation -> END
     """
@@ -60,7 +61,7 @@ def create_interview_graph():
     workflow.add_node("ask_question", ask_question_node)
     workflow.add_node("generate_final_evaluation", generate_final_evaluation_node)
 
-    # Conditional entry point from START
+    # Primary entry point conditional routing
     workflow.add_conditional_edges(
         START,
         route_start,
@@ -69,18 +70,12 @@ def create_interview_graph():
             "evaluate_answer": "evaluate_answer",
             "ask_question": "ask_question",
             "generate_final_evaluation": "generate_final_evaluation",
-        },
-    )
-
-    # Question generation flows to asking Question 1, or terminates on missing data
-    workflow.add_conditional_edges(
-        "generate_questions",
-        route_after_generate,
-        {
-            "ask_question": "ask_question",
             END: END,
         },
     )
+
+    # Question generation flows directly to asking the first question
+    workflow.add_edge("generate_questions", "ask_question")
 
     # Turn cycle
     workflow.add_edge("evaluate_answer", "process_answer")
@@ -107,3 +102,4 @@ def create_interview_graph():
 
 # Compiled graph instance
 interview_graph = create_interview_graph()
+

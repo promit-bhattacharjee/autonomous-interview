@@ -96,15 +96,18 @@ def main():
         print("=" * 75 + "\n")
         return
 
-    topics_count = len(state.get("topics", []))
-    questions_count = len(state.get("questions", []))
-    followups_count = len(state.get("suggested_followups", []))
+    topics = state.get("topics", [])
+    topics_count = len(topics)
+    questions_count = sum(len(t.questions) for t in topics)
+    followups_count = sum(sum(len(q.followups) for q in t.questions) for t in topics)
     print(f"\n[SUCCESS] Interview Plan Generated: {topics_count} Topics | {questions_count} Questions | {followups_count} Follow-ups\n")
 
     if first_question:
         print("-" * 75)
         print(f"\n🎙️  [Interviewer]:\n{first_question}\n")
         print("-" * 75)
+
+    eval_data = {}
 
     # Turn-by-Turn Interactive Conversation Loop
     while session.latest_state.get("interview_status") != "completed":

@@ -1,11 +1,13 @@
-import json
-from typing import Any, List
+from typing import List
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from interview.llm import get_speech_llm, get_thinking_llm
+from interview.helper import (
+    ensure_text_content,
+    get_speech_llm,
+    get_structured_thinking_llm,
+)
 from interview.prompts import (
     ANSWER_EVALUATION_HUMAN_PROMPT,
     ANSWER_EVALUATION_SYSTEM_PROMPT,
-    DOCUMENT_EXTRACTION_PROMPT,
     FINAL_EVALUATION_HUMAN_PROMPT,
     FINAL_EVALUATION_SYSTEM_PROMPT,
     INTERVIEW_CONCLUDE_PROMPT,
@@ -18,191 +20,75 @@ from interview.state import (
     EvaluationRecord,
     FinalEvaluation,
     InterviewState,
-    QuestionListModelState,
-    StudentData,
-    UniversityData,
+    QuestionPlanModel,
 )
 from interview.tools.question_helpers import (
-    get_active_followup,
-    get_active_question,
-    get_active_topic,
-    get_active_turn_target,
-    get_evaluations_for_turn,
+    advance_turn,
+    get_current_turn_target,
     get_latest_evaluation,
-    get_next_relational_turn,
-    is_active_turn_followup,
-    is_active_turn_reask,
+    is_current_turn_reask,
 )
 
-
-def _serialize_model(obj: Any) -> Any:
-    """Helper to convert Pydantic models or dicts into JSON-friendly dicts."""
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump()
-    if isinstance(obj, dict):
-        return {k: _serialize_model(v) for k, v in obj.items() if v is not None}
-    if isinstance(obj, list):
-        return [_serialize_model(v) for v in obj]
-    return obj
-
-
-def _ensure_text_content(msg: AIMessage) -> AIMessage:
-    """Normalizes multimodal content blocks into clean string text."""
-    if isinstance(msg.content, list):
-        text_parts = [
-            p.get("text", "") if isinstance(p, dict) else str(p)
-            for p in msg.content
-        ]
-        msg.content = "".join(text_parts).strip()
-    return msg
-
-
-def _get_structured_thinking_llm(schema: Any):
-    """
-    Returns a structured thinking model using OpenRouter DeepSeek V4 Flash 0731,
-    with automatic fallback to LLaMA-3.3-70B if upstream OpenRouter providers
-    experience temporary rate-limiting.
-    """
-    primary = get_thinking_llm()
-    fallback = get_thinking_llm(model_name="meta-llama/llama-3.3-70b-instruct")
-    try:
-        return primary.with_structured_output(schema).with_fallbacks([fallback.with_structured_output(schema)])
-    except Exception:
-        return primary.with_structured_output(schema)
-
-
 # ==============================================================================
-# NODE 1: Dynamic Question Generation Node (Powered by OpenRouter DeepSeek V4 Flash 0731)
+# NODE 1: Dynamic Question Generation Node (Nested Tree Architecture: Pattern A)
 # ==============================================================================
 
 def generate_questions_node(state: InterviewState) -> dict:
     """
-    Generates structured interview topics, questions, and suggested follow-ups
-    using OpenRouter DeepSeek V4 Flash 0731. Uses compressed StudentData and UniversityData.
+    Generates structured interview topics with nested standalone questions and follow-ups
+    using OpenRouter DeepSeek V4 Flash 0731. Operates on pre-validated state.
     """
     expected_time = state.get("expected_total_time_to_ans", 45)
-
-    # 1. Resolve and validate compressed StudentData
     student_data = state.get("student_data")
-    if not student_data:
-        student_id = state.get("student_id")
-        if not student_id:
-            error_msg = "❌ [DATA VALIDATION FAILED]: Neither 'student_data' nor 'student_id' was provided. Interview session terminated."
-            return {
-                "interview_status": "completed",
-                "messages": [AIMessage(content=error_msg)],
-            }
-        from mock_api import fetch_student_api
-        raw_student = fetch_student_api(student_id)
-        if not raw_student:
-            error_msg = f"❌ [DATA VALIDATION FAILED]: Student profile for student_id '{student_id}' was not found in data repository. Interview session terminated."
-            return {
-                "interview_status": "completed",
-                "messages": [AIMessage(content=error_msg)],
-            }
-        student_data = StudentData(**{k: v for k, v in raw_student.items() if k in StudentData.model_fields})
-
-    # Validate essential student fields
-    missing_student_fields = []
-    if not getattr(student_data, "student_id", None):
-        missing_student_fields.append("student_id")
-    if not getattr(student_data, "full_name", None):
-        missing_student_fields.append("full_name")
-    if not getattr(student_data, "target_university", None):
-        missing_student_fields.append("target_university")
-    if not getattr(student_data, "target_course", None):
-        missing_student_fields.append("target_course")
-
-    if missing_student_fields:
-        error_msg = f"❌ [DATA VALIDATION FAILED]: Incomplete student data. Missing required fields: {', '.join(missing_student_fields)}. Interview session terminated."
-        return {
-            "interview_status": "completed",
-            "messages": [AIMessage(content=error_msg)],
-        }
-
-    # 2. Resolve and validate compressed UniversityData
     university_data = state.get("university_data")
-    if not university_data:
-        university_id = state.get("university_id")
-        if not university_id:
-            error_msg = "❌ [DATA VALIDATION FAILED]: Neither 'university_data' nor 'university_id' was provided. Interview session terminated."
-            return {
-                "interview_status": "completed",
-                "messages": [AIMessage(content=error_msg)],
-            }
-        from mock_api import fetch_university_api
-        raw_univ = fetch_university_api(university_id)
-        if not raw_univ:
-            error_msg = f"❌ [DATA VALIDATION FAILED]: University specifications for university_id '{university_id}' were not found in data repository. Interview session terminated."
-            return {
-                "interview_status": "completed",
-                "messages": [AIMessage(content=error_msg)],
-            }
-        university_data = UniversityData(**{k: v for k, v in raw_univ.items() if k in UniversityData.model_fields})
 
-    # Validate essential university fields
-    missing_univ_fields = []
-    if not getattr(university_data, "university_id", None):
-        missing_univ_fields.append("university_id")
-    if not getattr(university_data, "official_name", None):
-        missing_univ_fields.append("official_name")
-
-    if missing_univ_fields:
-        error_msg = f"❌ [DATA VALIDATION FAILED]: Incomplete university data. Missing required fields: {', '.join(missing_univ_fields)}. Interview session terminated."
-        return {
-            "interview_status": "completed",
-            "messages": [AIMessage(content=error_msg)],
-        }
+    target_univ = student_data.target_university if student_data else ""
+    target_course = student_data.target_course if student_data else ""
+    tuition_fee = student_data.tuition_fee_gbp if student_data else 0.0
+    living_cost = student_data.living_cost_gbp if student_data else 0.0
 
     expected_kw = [
-        student_data.target_university,
-        student_data.target_course,
-        f"tuition {student_data.tuition_fee_gbp}",
-        f"maintenance {student_data.living_cost_gbp}",
+        str(target_univ),
+        str(target_course),
+        f"tuition {tuition_fee}",
+        f"maintenance {living_cost}",
         "28-day rule",
         "home country return",
     ]
-    if university_data.core_modules:
+    if university_data and university_data.core_modules:
         for mod in university_data.core_modules[:2]:
-            mod_title = mod.get("title") or mod.get("module_name")
+            mod_title = mod.get("title") or mod.get("module_name") if isinstance(mod, dict) else getattr(mod, "title", getattr(mod, "module_name", None))
             if mod_title:
                 expected_kw.append(mod_title)
 
-    student_json = json.dumps(_serialize_model(student_data), indent=2)
-    university_json = json.dumps(_serialize_model(university_data), indent=2)
+    system_content = QUESTION_GENERATION_FROM_STATE_PROMPT.format(
+        student_info=student_data.model_dump_json(indent=2) if student_data else "{}",
+        university_info=university_data.model_dump_json(indent=2) if university_data else "{}",
+    )
 
     human_content = QUESTION_GENERATION_HUMAN_PROMPT.format(
-        student_info=student_json,
-        university_info=university_json,
-        extraced_text="Standardized admissions & credibility specifications.",
         difficulty=state.get("difficulty", "Medium"),
         expected_time_to_ans=expected_time,
-        expected_answer_keywords=", ".join(expected_kw),
+        expected_answer_keywords=", ".join([k for k in expected_kw if k]),
     )
 
     messages = [
-        SystemMessage(content=QUESTION_GENERATION_FROM_STATE_PROMPT),
+        SystemMessage(content=system_content),
         HumanMessage(content=human_content),
     ]
 
-    # Use OpenRouter thinking model (DeepSeek V4 Flash 0731 with fallback)
-    structured_llm = _get_structured_thinking_llm(QuestionListModelState)
-    result: QuestionListModelState = structured_llm.invoke(messages)
-
-    first_topic_id = result.topics[0].id if result.topics else None
-    first_question_id = result.questions[0].question_id if result.questions else None
+    structured_llm = get_structured_thinking_llm(QuestionPlanModel, temperature=0.0)
+    result: QuestionPlanModel = structured_llm.invoke(messages)
 
     return {
         "student_data": student_data,
         "university_data": university_data,
         "topics": result.topics,
-        "questions": result.questions,
-        "suggested_followups": result.suggested_followups,
         "expected_total_time_to_ans": result.expected_total_time_to_ans,
         "difficulty": result.difficulty,
-        "active_topic_id": first_topic_id,
-        "active_question_id": first_question_id,
-        "active_followup_order": None,
+        "current_topic_idx": 0,
+        "current_question_idx": 0,
+        "current_followup_idx": -1,
         "interview_status": "in_progress",
         "evaluations": [],
     }
@@ -221,14 +107,14 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     last_ai_msg = next((m for m in reversed(messages_list) if isinstance(m, AIMessage)), None)
     last_human_msg = next((m for m in reversed(messages_list) if isinstance(m, HumanMessage)), None)
 
-    active_q = get_active_question(state)
-    if not last_human_msg or not active_q:
+    if not last_human_msg:
         return {}
 
-    active_topic = get_active_topic(state)
-    topic_name = active_topic.name if active_topic else "UKVI Credibility & Academic Fit"
+    question_text, keywords_list, topic_name, is_followup = get_current_turn_target(state)
+    if not question_text:
+        return {}
 
-    question_text, keywords_list, context_type = get_active_turn_target(state)
+    context_type = "Follow-up Question" if is_followup else "Primary Standalone Question"
 
     prompt_content = ANSWER_EVALUATION_HUMAN_PROMPT.format(
         topic_name=topic_name,
@@ -244,22 +130,26 @@ def evaluate_answer_node(state: InterviewState) -> dict:
     ]
 
     # OpenRouter thinking model evaluates accuracy (DeepSeek V4 Flash 0731 with fallback)
-    structured_llm = _get_structured_thinking_llm(AnswerAccuracyEvaluation)
+    structured_llm = get_structured_thinking_llm(AnswerAccuracyEvaluation, temperature=0.0)
     result: AnswerAccuracyEvaluation = structured_llm.invoke(eval_messages)
 
-    is_followup = is_active_turn_followup(state)
-    followup_order = state.get("active_followup_order")
+    t_idx = state.get("current_topic_idx", 0)
+    q_idx = state.get("current_question_idx", 0)
+    f_idx = state.get("current_followup_idx", -1)
     turn_type = "suggested_followup" if is_followup else "question"
 
-    prior_evals = get_evaluations_for_turn(
-        state, active_q.question_id, turn_type, followup_order=followup_order
-    )
+    prior_evals = [
+        e for e in state.get("evaluations", [])
+        if e.topic_id == t_idx
+        and e.question_id == q_idx
+        and e.followup_order == (f_idx if is_followup else None)
+    ]
     attempt_number = len(prior_evals) + 1
 
     record = EvaluationRecord(
-        topic_id=active_q.topic_id,
-        question_id=active_q.question_id,
-        followup_order=followup_order,
+        topic_id=t_idx,
+        question_id=q_idx,
+        followup_order=f_idx if is_followup else None,
         turn_type=turn_type,
         attempt_number=attempt_number,
         accuracy_score=float(result.accuracy_score),
@@ -286,8 +176,10 @@ def ask_question_node(state: InterviewState) -> dict:
     Formulates and delivers the conversational interview question, follow-up, or re-ask.
     Uses Gemini for conversational interviewer voice phrasing.
     """
-    active_q = get_active_question(state)
-    is_completed = state.get("interview_status") == "completed" or not active_q
+    is_completed = state.get("interview_status") == "completed"
+    question_to_ask, _, topic_name, is_followup = get_current_turn_target(state)
+    if not question_to_ask:
+        is_completed = True
 
     # Speech LLM for phrasing questions
     speech_llm = get_speech_llm()
@@ -299,19 +191,10 @@ def ask_question_node(state: InterviewState) -> dict:
         ])
         return {
             "interview_status": "completed",
-            "messages": [_ensure_text_content(conclude_msg)],
-            "active_topic_id": None,
-            "active_question_id": None,
-            "active_followup_order": None,
+            "messages": [ensure_text_content(conclude_msg)],
         }
 
-    active_topic = get_active_topic(state)
-    topic_name = active_topic.name if active_topic else "UKVI Credibility"
-
-    is_reask = is_active_turn_reask(state)
-    is_followup = is_active_turn_followup(state)
-    question_to_ask, _, _ = get_active_turn_target(state)
-
+    is_reask = is_current_turn_reask(state)
     latest_eval = get_latest_evaluation(state)
     unmatched_keywords = latest_eval.unmatched_keywords if (latest_eval and is_reask) else []
 
@@ -338,45 +221,25 @@ def ask_question_node(state: InterviewState) -> dict:
     ai_response = speech_llm.invoke(messages)
 
     return {
-        "messages": [_ensure_text_content(ai_response)],
-        "active_topic_id": active_q.topic_id,
-        "active_question_id": active_q.question_id,
+        "messages": [ensure_text_content(ai_response)],
         "interview_status": "in_progress",
     }
 
 
 # ==============================================================================
-# NODE 4: Candidate Answer Process & Sequencing Node
+# NODE 4: Candidate Answer Process & Sequencing Node (Nested Tree Architecture)
 # ==============================================================================
 
 def process_answer_node(state: InterviewState) -> dict:
     """
-    Relational turn sequencer:
-    - If answer failed (< 70%) on attempt 1, keeps pointers for re-ask.
-    - If passed (>= 70%) or retry completed, advances to next question/follow-up/topic.
+    Nested tree cursor sequencer:
+    - If answer failed (< 70%) on attempt 1, keeps cursors for re-ask.
+    - If passed (>= 70%) or retry completed, advances cursor (follow-up -> question -> topic).
     """
-    active_q = get_active_question(state)
-    if not active_q or state.get("interview_status") == "completed":
+    if state.get("interview_status") == "completed":
         return {"interview_status": "completed"}
 
-    if is_active_turn_reask(state):
-        return {}
-
-    next_topic_id, next_question_id, next_followup_order, is_completed = get_next_relational_turn(state)
-
-    if is_completed or next_question_id is None:
-        return {
-            "interview_status": "completed",
-            "active_topic_id": None,
-            "active_question_id": None,
-            "active_followup_order": None,
-        }
-
-    return {
-        "active_topic_id": next_topic_id,
-        "active_question_id": next_question_id,
-        "active_followup_order": next_followup_order,
-    }
+    return advance_turn(state)
 
 
 # ==============================================================================
@@ -390,8 +253,8 @@ def generate_final_evaluation_node(state: InterviewState) -> dict:
     """
     messages = state.get("messages", [])
     evaluations = state.get("evaluations", [])
-    student_data = state.get("student_data") or StudentData()
-    university_data = state.get("university_data") or UniversityData()
+    student_data = state.get("student_data") or {}
+    university_data = state.get("university_data") or {}
 
     # 1. Format Verbatim Transcript
     transcript_lines = []
@@ -415,8 +278,8 @@ def generate_final_evaluation_node(state: InterviewState) -> dict:
     eval_summary = "\n".join(eval_lines) if eval_lines else "No individual evaluations recorded."
 
     human_content = FINAL_EVALUATION_HUMAN_PROMPT.format(
-        student_info=json.dumps(_serialize_model(student_data), indent=2),
-        university_info=json.dumps(_serialize_model(university_data), indent=2),
+        student_info=student_data.model_dump_json(indent=2) if student_data else "{}",
+        university_info=university_data.model_dump_json(indent=2) if university_data else "{}",
         turn_evaluations=eval_summary,
         transcript=full_transcript,
     )
@@ -427,7 +290,7 @@ def generate_final_evaluation_node(state: InterviewState) -> dict:
     ]
 
     # OpenRouter thinking model generates final report (DeepSeek V4 Flash 0731 with fallback)
-    structured_llm = _get_structured_thinking_llm(FinalEvaluation)
+    structured_llm = get_structured_thinking_llm(FinalEvaluation, temperature=0.0)
     final_report: FinalEvaluation = structured_llm.invoke(eval_messages)
 
     return {

@@ -44,10 +44,7 @@ def fetch_student_api(student_id: str = "UK-CAS-2026-9041") -> Optional[Dict[str
     return None
 
 
-def fetch_university_api(
-    university_id: str = "UK-HERTS-01",
-    course_id: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+def fetch_university_api(university_id: str = "UK-HERTS-01") -> Optional[Dict[str, Any]]:
     """
     Simulates a backend API endpoint (e.g. GET /api/v1/universities/{university_id}).
     Loads structured JSON from data/universities/.
@@ -82,3 +79,4 @@ def fetch_university_api(
 
     # No record found in repository
     return None
+

@@ -1,3 +1,4 @@
+import threading
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from langchain_core.messages import HumanMessage
@@ -37,10 +38,32 @@ class InterviewSession:
         self.initial_payload = initial_payload
         self.student_data = student_data
         self.university_data = university_data
-        self.student_id = student_id or "UK-CAS-2026-9041"
-        self.university_id = university_id or "UK-HERTS-01"
+        if not (self.questions or self.topics or self.initial_payload):
+            self.student_id = student_id or "UK-CAS-2026-9041"
+            self.university_id = university_id or "UK-HERTS-01"
+        else:
+            self.student_id = student_id
+            self.university_id = university_id
         self.difficulty = difficulty
         self.latest_state: Dict[str, Any] = {}
+        self._lock = threading.Lock()
+
+        # Orchestration Layer: Resolve data from data repository, enforcing strict Pydantic validation
+        if self.student_data is None and self.student_id:
+            from mock_api import fetch_student_api
+            raw_student = fetch_student_api(self.student_id)
+            if raw_student:
+                self.student_data = StudentData(**raw_student)
+        elif isinstance(self.student_data, dict):
+            self.student_data = StudentData(**self.student_data)
+
+        if self.university_data is None and self.university_id:
+            from mock_api import fetch_university_api
+            raw_univ = fetch_university_api(self.university_id)
+            if raw_univ:
+                self.university_data = UniversityData(**raw_univ)
+        elif isinstance(self.university_data, dict):
+            self.university_data = UniversityData(**self.university_data)
 
     def start(self) -> str:
         """
@@ -49,22 +72,41 @@ class InterviewSession:
         Otherwise, executes START -> generate_questions (using OpenRouter DeepSeek V4 Flash 0731) -> ask_question -> END.
         Returns the formulated first question string for TTS to speak.
         """
-        if self.questions:
-            first_topic_id = self.topics[0].id if self.topics else None
-            first_question_id = self.questions[0].question_id if self.questions else None
+        if self.topics or self.questions:
+            topics = list(self.topics)
+            if topics and self.questions and not any(t.questions for t in topics):
+                topic_map = {t.id: t for t in topics}
+                for q in self.questions:
+                    t_id = getattr(q, "topic_id", None)
+                    if t_id and t_id in topic_map:
+                        topic_map[t_id].questions.append(q)
+                    else:
+                        topics[0].questions.append(q)
+            elif not topics and self.questions:
+                topics = [
+                    TopicState(
+                        id=1,
+                        name="Interview Topic",
+                        questions=self.questions,
+                    )
+                ]
 
             initial_state = {
-                "topics": self.topics,
-                "questions": self.questions,
-                "suggested_followups": [],
-                "active_topic_id": first_topic_id,
-                "active_question_id": first_question_id,
-                "active_followup_order": None,
+                "student_data": self.student_data,
+                "university_data": self.university_data,
+                "student_id": self.student_id,
+                "university_id": self.university_id,
+                "difficulty": self.difficulty,
+                "topics": topics,
+                "current_topic_idx": 0,
+                "current_question_idx": 0,
+                "current_followup_idx": -1,
+                "interview_status": "not_started",
                 "evaluations": [],
                 "messages": [],
             }
         elif self.initial_payload:
-            initial_state = self.initial_payload
+            initial_state = dict(self.initial_payload)
         else:
             initial_state = {
                 "student_data": self.student_data,
@@ -92,10 +134,18 @@ class InterviewSession:
             - is_completed (bool): True if the interview has concluded.
             - eval_data (dict): Accuracy score, keyword coverage, and final_evaluation (if concluded).
         """
-        self.latest_state = interview_graph.invoke(
-            {"messages": [HumanMessage(content=candidate_text)]},
-            config=self.config,
-        )
+        if self.latest_state.get("interview_status") == "completed":
+            final_eval = self.get_final_evaluation()
+            eval_data: Dict[str, Any] = {}
+            if final_eval:
+                eval_data["final_evaluation"] = final_eval
+            return "", True, eval_data
+
+        with self._lock:
+            self.latest_state = interview_graph.invoke(
+                {"messages": [HumanMessage(content=candidate_text)]},
+                config=self.config,
+            )
 
         is_completed = self.latest_state.get("interview_status") == "completed"
         messages = self.latest_state.get("messages", [])

@@ -11,14 +11,16 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
+from livekit import rtc
 from livekit.agents import (
     AutoSubscribe,
     JobContext,
     WorkerOptions,
     cli,
+    llm,
     tts,
 )
-from livekit.agents.voice import Agent, AgentSession, events
+from livekit.agents.voice import Agent, AgentSession
 from livekit.plugins import silero
 from livekit.plugins.google.beta import GeminiSTT, GeminiTTS
 
@@ -29,6 +31,81 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("livekit-audio-communicator")
+
+
+class InterviewAgent(Agent):
+    """
+    Subclasses LiveKit Voice Agent to integrate LangGraph turn-by-turn brain
+    into the native LiveKit turn completion lifecycle.
+    Prevents intermediate STT chunk races and guarantees single-turn sequencing.
+    """
+
+    def __init__(
+        self,
+        interview_session: InterviewSession,
+        voice_session: AgentSession,
+        room: rtc.Room,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.interview_session = interview_session
+        self.voice_session = voice_session
+        self.room = room
+        self.turn_lock = asyncio.Lock()
+        self.is_interview_concluded = False
+
+    async def on_user_turn_completed(
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
+        """
+        Invoked exclusively when VAD and TurnDetector confirm the candidate
+        has finished their complete turn. Replaces low-level chunk listening.
+        """
+        if self.is_interview_concluded:
+            return
+
+        candidate_text = (new_message.text_content or "").strip() if new_message else ""
+        if not candidate_text:
+            return
+
+        async with self.turn_lock:
+            if self.is_interview_concluded:
+                return
+
+            logger.info(f"\n[Candidate Voice Transcribed]: {candidate_text}")
+
+            # Run synchronous LangGraph brain execution in thread pool to prevent blocking WebRTC loop
+            next_text, is_done, eval_data = await asyncio.to_thread(
+                self.interview_session.submit_candidate_answer, candidate_text
+            )
+
+            # Broadcast live evaluation metrics over WebRTC Data Channel for frontend UI scorecards
+            if eval_data:
+                logger.info(
+                    f"[Evaluation] Score: {eval_data.get('accuracy_score', 0):.1f}% | "
+                    f"Passed: {eval_data.get('is_passed', False)} | "
+                    f"Re-ask: {eval_data.get('is_reask', False)}"
+                )
+                try:
+                    await self.room.local_participant.publish_data(
+                        json.dumps(eval_data).encode("utf-8")
+                    )
+                except Exception as e:
+                    logger.debug(f"Data channel publish skipped: {e}")
+
+            if next_text:
+                logger.info(f"[Interviewer Response]: {next_text}\n")
+                speech_handle = self.voice_session.say(next_text)
+                await speech_handle
+
+            if is_done:
+                self.is_interview_concluded = True
+                logger.info("Interview concluded. Cleanly disconnecting room session...")
+                await asyncio.sleep(1.0)
+                try:
+                    await self.room.disconnect()
+                except Exception as e:
+                    logger.debug(f"Room disconnect error: {e}")
 
 
 async def entrypoint(ctx: JobContext):
@@ -56,73 +133,33 @@ async def entrypoint(ctx: JobContext):
         instructions="Speak clearly, warmly, and at a measured pace like a professional UK university interviewer.",
     )
     streaming_tts = tts.StreamAdapter(tts=gemini_tts)
+    voice_session = AgentSession()
 
-    agent = Agent(
+    agent = InterviewAgent(
+        interview_session=interview_session,
+        voice_session=voice_session,
+        room=ctx.room,
         instructions="You are an autonomous UK university credibility and academic interviewer. Ask questions clearly and concisely.",
         vad=silero.VAD.load(),
         stt=GeminiSTT(language="en-US"),
         tts=streaming_tts,
     )
 
-    voice_session = AgentSession()
-
-    # 5. Turn-by-Turn Audio Loop:
-    # When candidate finishes speaking, Gemini STT emits final UserInputTranscribedEvent
-    @voice_session.on("user_input_transcribed")
-    def on_user_input(event: events.UserInputTranscribedEvent):
-        if not event.is_final:
-            return
-
-        candidate_text = event.transcript.strip()
-        if not candidate_text:
-            return
-
-        async def _handle_turn():
-            logger.info(f"\n[Candidate Voice Transcribed]: {candidate_text}")
-
-            # The Brain evaluates the answer and formulates the next question or conclusion
-            # Run synchronous LangGraph brain execution in thread pool to prevent blocking WebRTC loop
-            next_text, is_done, eval_data = await asyncio.to_thread(
-                interview_session.submit_candidate_answer, candidate_text
-            )
-
-            # Broadcast live evaluation metrics over WebRTC Data Channel for frontend UI scorecards
-            if eval_data:
-                logger.info(
-                    f"[Evaluation] Score: {eval_data.get('accuracy_score', 0):.1f}% | "
-                    f"Passed: {eval_data.get('is_passed', False)} | "
-                    f"Re-ask: {eval_data.get('is_reask', False)}"
-                )
-                try:
-                    await ctx.room.local_participant.publish_data(
-                        json.dumps(eval_data).encode("utf-8")
-                    )
-                except Exception as e:
-                    logger.debug(f"Data channel publish skipped: {e}")
-
-            logger.info(f"[Interviewer Response]: {next_text}\n")
-
-            # LiveKit speaks the question generated by the Brain
-            await voice_session.say(next_text)
-
-        asyncio.create_task(_handle_turn())
-
-    # 6. Generate Question 1 & Start Voice Session
+    # 5. Generate Question 1 & Start Voice Session
     logger.info("Generating Question 1 from student profile & rubric...")
     first_question = await asyncio.to_thread(interview_session.start)
 
     # Output detailed debug state breakdown to terminal for inspection
     print_interview_state_debug(interview_session.latest_state)
 
-    # Testing Breakpoint: Disconnects live session before audio loop as requested
-    # Set BREAKPOINT_AFTER_QUESTION_GEN=false in .env to proceed to full live voice interview
-    breakpoint_enabled = os.getenv("BREAKPOINT_AFTER_QUESTION_GEN", "true").lower() in ("true", "1", "yes")
+    # Debug Breakpoint (Disabled by default for full live voice interview)
+    # Set BREAKPOINT_AFTER_QUESTION_GEN=true in .env to disconnect after initial question inspection
+    breakpoint_enabled = os.getenv("BREAKPOINT_AFTER_QUESTION_GEN", "false").lower() in ("true", "1", "yes")
     if breakpoint_enabled:
         print("\n" + "=" * 80)
         print("🛑 [TESTING BREAKPOINT HIT]")
         print("   Question generation, rubrics, and state have been output above.")
         print("   Disconnecting the live voice interview session as requested for debugging.")
-        print("   (To continue to the live voice interview, set BREAKPOINT_AFTER_QUESTION_GEN=false in .env)")
         print("=" * 80 + "\n")
         try:
             await ctx.room.disconnect()
@@ -132,8 +169,8 @@ async def entrypoint(ctx: JobContext):
 
     await voice_session.start(agent, room=ctx.room)
     logger.info(f"Interviewer asks Question 1: {first_question}")
-    await asyncio.sleep(0.5)
-    await voice_session.say(first_question)
+    speech_handle = voice_session.say(first_question)
+    await speech_handle
 
 
 if __name__ == "__main__":

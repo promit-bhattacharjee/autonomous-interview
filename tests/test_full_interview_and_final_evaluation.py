@@ -34,46 +34,39 @@ class TestFullInterviewAndFinalEvaluation(unittest.TestCase):
         print("Running End-to-End Interview & Final Evaluation Pipeline Test")
         print("=" * 75)
 
-        # 1. Setup compact 2-question plan
+        # 1. Setup compact 2-question nested tree plan (Pattern A)
         topics = [
             TopicState(
                 id=1,
                 name="Academic Fit & Course Selection",
-                topic_order=1,
                 expected_time_to_ans=45,
-                expected_answer_keywords=["Machine Learning", "Neural Networks", "Robotics", "7COM1076"],
+                questions=[
+                    QuestionState(
+                        question="Why did you choose the MSc in AI at Hertfordshire, and how do the core modules link to your background?",
+                        difficulty="Medium",
+                        expected_time_to_ans=45,
+                        expected_answer_keywords=["Machine Learning", "7COM1076", "Robotics", "PyTorch"],
+                        followups=[],
+                    )
+                ],
             ),
             TopicState(
                 id=2,
                 name="Financial Capability & UKVI Compliance",
-                topic_order=2,
                 expected_time_to_ans=45,
-                expected_answer_keywords=["16500", "12500", "28-day rule", "35000", "Father"],
-            ),
-        ]
-        questions = [
-            QuestionState(
-                topic_id=1,
-                question_id=101,
-                question_order=1,
-                question="Why did you choose the MSc in AI at Hertfordshire, and how do the core modules link to your background?",
-                difficulty="Medium",
-                expected_time_to_ans=45,
-                expected_answer_keywords=["Machine Learning", "7COM1076", "Robotics", "PyTorch"],
-            ),
-            QuestionState(
-                topic_id=2,
-                question_id=201,
-                question_order=1,
-                question="Can you detail your tuition fees, living costs, and how your funds comply with the UKVI 28-day rule?",
-                difficulty="Medium",
-                expected_time_to_ans=45,
-                expected_answer_keywords=["16500", "12500", "28-day rule", "35000", "Father"],
+                questions=[
+                    QuestionState(
+                        question="Can you detail your tuition fees, living costs, and how your funds comply with the UKVI 28-day rule?",
+                        difficulty="Medium",
+                        expected_time_to_ans=45,
+                        expected_answer_keywords=["16500", "12500", "28-day rule", "35000", "Father"],
+                        followups=[],
+                    )
+                ],
             ),
         ]
 
         session = InterviewSession(
-            questions=questions,
             topics=topics,
             student_id="UK-CAS-2026-9041",
             university_id="UK-HERTS-01",

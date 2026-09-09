@@ -30,7 +30,7 @@ def main():
     session = InterviewSession()
     session.start()
 
-    if session.latest_state.get("interview_status") == "completed" and not session.latest_state.get("questions"):
+    if session.latest_state.get("interview_status") == "completed" and not session.latest_state.get("topics"):
         print("\n" + "=" * 80)
         print("🛑 SESSION TERMINATED:")
         messages = session.latest_state.get("messages", [])
