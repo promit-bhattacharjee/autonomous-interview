@@ -1,16 +1,15 @@
 [project]
-name = "interview"
-version = "0.1.0"
-description = "Add your description here"
+name = "interview-workspace"
+version = "0.2.0"
+description = "UKVI Credibility Voice Interview System - Multi-Service Workspace"
 readme = "README.md"
-authors = [
-    { name = "Promit Bhattacharjee", email = "promitbhattacharjee.work@gmail.com" }
-]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=42.0.0",
     "dotenv>=0.9.9",
     "fastapi>=0.115.0",
     "httpx>=0.27.0",
+    "jinja2>=3.1.4",
     "langchain>=1.3.18",
     "langchain-google-genai>=4.3.7",
     "langchain-openai>=1.6.1",
@@ -19,12 +18,20 @@ dependencies = [
     "livekit-api>=1.2.1",
     "livekit-plugins-google>=1.8.0",
     "livekit-plugins-silero>=1.8.0",
+    "pydantic>=2.7.0",
+    "pyjwt>=2.8.0",
+    "pytest>=8.0.0",
+    "python-multipart>=0.0.9",
+    "sqlalchemy>=2.0.30",
     "uvicorn[standard]>=0.30.0",
 ]
 
-[project.scripts]
-interview = "interview:main"
+[tool.uv.workspace]
+members = ["services/web_api", "services/langgraph_agent"]
 
-[build-system]
-requires = ["uv_build>=0.12.7,<0.13.0"]
-build-backend = "uv_build"
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "services/web_api/tests", "services/langgraph_agent/tests"]
+pythonpath = [".", "src", "services/web_api", "services/langgraph_agent"]

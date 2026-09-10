@@ -14,3 +14,56 @@ services:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
       - LIVEKIT_KEYS=devkey: secret
+    networks:
+      - interview_net
+
+  web_api:
+    build:
+      context: ./services/web_api
+      dockerfile: Dockerfile
+    container_name: interview_web_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:////data/interview.db
+      - LIVEKIT_URL=http://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - JWT_SECRET=change-this-in-production-ukvi-jwt-secret-key-32-chars
+      - ENCRYPTION_SECRET_KEY=k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=
+    volumes:
+      - sqlite_data:/data
+    depends_on:
+      - livekit
+    networks:
+      - interview_net
+
+  langgraph_agent:
+    build:
+      context: ./services/langgraph_agent
+      dockerfile: Dockerfile
+    container_name: interview_langgraph_agent
+    restart: unless-stopped
+    environment:
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+      - API_SERVICE_URL=http://web_api:8000
+      - DATABASE_URL=sqlite:////data/interview.db
+      - ENCRYPTION_SECRET_KEY=k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=
+    volumes:
+      - sqlite_data:/data
+    depends_on:
+      - livekit
+      - web_api
+    networks:
+      - interview_net
+
+volumes:
+  sqlite_data:
+    driver: local
+
+networks:
+  interview_net:
+    driver: bridge

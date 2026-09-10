@@ -1,0 +1,30 @@
+# Ignore secrets and environment configurations
+.env
+*.env
+.env.*
+
+# Ignore databases
+*.db
+*.sqlite
+*.sqlite3
+instance/
+data/
+
+# Ignore Python runtime artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+env/
+venv/
+
+# Ignore Git and IDE files
+.git/
+.gitignore
+.dockerignore
+.idea/
+.vscode/
+*.log
