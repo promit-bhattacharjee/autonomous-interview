@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - UKVI System{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Administrative Control Center</h2>
+            <span class="badge bg-primary fs-6">UKVI Admissions Admin</span>
+        </div>
+    </div>
+
+    <!-- Question Banks Management -->
+    <div class="col-md-8">
+        <div class="card p-4 h-100 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="card-title mb-0">Active Question Banks</h4>
+                <span class="badge bg-info text-dark">{{ banks|length }} Banks</span>
+            </div>
+            {% if banks %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Difficulty</th>
+                                <th>Topics</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in banks %}
+                            <tr>
+                                <td class="fw-semibold">{{ b.title }}</td>
+                                <td>
+                                    <span class="badge {% if b.difficulty == 'Easy' %}bg-success{% elif b.difficulty == 'Medium' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                        {{ b.difficulty }}
+                                    </span>
+                                </td>
+                                <td>{{ b.topics|length }}</td>
+                                <td>
+                                    <span class="badge bg-success">Active</span>
+                                </td>
+                                <td>
+                                    <a href="/admin/banks/{{ b.id }}" class="btn btn-sm btn-outline-info">Inspect Tree</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-secondary">No question banks generated yet. Upload curriculum text below to generate one via the <code>question_generation_graph</code>.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Generate Question Bank Box -->
+    <div class="col-md-4">
+        <div class="card p-4 h-100 shadow-sm">
+            <h4 class="card-title mb-3">Generate New Bank</h4>
+            <p class="small text-secondary">Runs <code>question_generation_graph</code> and suspends at Admin Review Checkpoint.</p>
+            <form action="/admin/banks/generate" method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Bank Title</label>
+                    <input type="text" name="title" class="form-control" placeholder="e.g. University of Hertfordshire - Intake 2026" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Difficulty Tier</label>
+                    <select name="difficulty" class="form-select">
+                        <option value="Easy">Easy</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Curriculum / Compliance Guidelines</label>
+                    <textarea name="curriculum_text" class="form-control" rows="5" placeholder="Paste course modules, tuition details, or specific UKVI questions..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-success w-100 py-2">Synthesize via Graph 1</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Candidate Assignment Matrix -->
+    <div class="col-md-12">
+        <div class="card p-4 shadow-sm">
+            <h4 class="card-title mb-3">Candidate Question Bank Assignment Matrix</h4>
+            <p class="small text-secondary">Strict Pre-Assignment Rule: International candidates cannot start a voice interview without an assigned Question Bank. Max 1 active bank per candidate.</p>
+            <form action="/admin/assignments" method="POST" class="row g-3 align-items-end mb-4">
+                <div class="col-md-4">
+                    <label class="form-label">Target Student</label>
+                    <select name="student_id" class="form-select" required>
+                        <option value="" disabled selected>Choose a student...</option>
+                        {% for s in students %}
+                            <option value="{{ s.id }}">{{ s.full_name }} ({{ s.user.username }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Assign Question Bank</label>
+                    <select name="bank_id" class="form-select" required>
+                        {% for b in banks %}
+                            <option value="{{ b.id }}">{{ b.title }} ({{ b.difficulty }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">Assign Bank (Auto-Deactivate Prior)</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

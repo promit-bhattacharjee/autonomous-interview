@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Student Portal - UKVI Credibility Interviewer{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2>Welcome, {{ profile.full_name or user.username }}</h2>
+            <span class="badge bg-secondary">Candidate ID: {{ user.username }}</span>
+        </div>
+    </div>
+
+    <!-- Pre-Interview Assignment Status -->
+    <div class="col-md-12">
+        {% if assigned_bank %}
+            <div class="card border-success p-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-success mb-2">Interview Ready</span>
+                        <h4 class="card-title text-success mb-1">Assigned: {{ assigned_bank.title }}</h4>
+                        <p class="text-secondary mb-0">Tier: <strong>{{ assigned_bank.difficulty }}</strong> &bull; {{ assigned_bank.topics|length }} Examination Topics Prepared</p>
+                    </div>
+                    <a href="/student/interview" class="btn btn-success btn-lg px-4">Launch Voice Interview 🎙️</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="card border-warning p-4 shadow-sm">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fs-1">⏳</span>
+                    <div>
+                        <h4 class="card-title text-warning mb-1">Awaiting Admin Question Bank Assignment</h4>
+                        <p class="text-secondary mb-0">The Pre-Assignment Gate is currently active. Your admissions officer must assign a verified Question Bank to your account before you can launch the live WebRTC credibility voice interview.</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- CAS Credibility Profile -->
+    <div class="col-md-6">
+        <div class="card p-4 h-100 shadow-sm">
+            <h4 class="card-title mb-3">Confirmation of Acceptance for Studies (CAS)</h4>
+            <form action="/student/profile" method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Full Legal Name</label>
+                    <input type="text" name="full_name" class="form-control" value="{{ profile.full_name }}" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Academic Background</label>
+                    <textarea name="academic_background" class="form-control" rows="2" placeholder="e.g. BSc Computer Science, 3.8 CGPA" required>{{ profile.academic_background }}</textarea>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Tuition Fee (£)</label>
+                        <input type="number" step="0.01" name="tuition_fee_gbp" class="form-control" value="{{ profile.tuition_fee_gbp }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Available Bank Funds (£)</label>
+                        <input type="number" step="0.01" name="available_funds_gbp" class="form-control" value="{{ profile.available_funds_gbp }}" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Sponsorship & 28-Day Holding Verification</label>
+                    <input type="text" name="sponsor_details" class="form-control" value="{{ profile.sponsor_details }}" placeholder="e.g. Self-funded, Sonali Bank fixed deposit > 28 consecutive days" required>
+                </div>
+                <button type="submit" class="btn btn-outline-primary w-100">Update CAS Credentials</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- BYOK Key Configuration -->
+    <div class="col-md-6">
+        <div class="card p-4 h-100 shadow-sm">
+            <h4 class="card-title mb-3">Bring Your Own Key (Optional BYOK)</h4>
+            <p class="small text-secondary">If funded by your institution, default keys are provided. You may supply personal OpenRouter or Groq credentials encrypted with AES-256 in the secure credential vault.</p>
+            {% if current_key_preview %}
+                <div class="alert alert-success d-flex justify-content-between align-items-center p-2 mb-3">
+                    <span>Vault Key: <code>{{ current_key_preview }}</code></span>
+                    <span class="badge bg-success">Encrypted</span>
+                </div>
+            {% endif %}
+            <form action="/student/byok" method="POST">
+                <div class="mb-3">
+                    <label class="form-label">AI Provider</label>
+                    <select name="provider" class="form-select">
+                        <option value="openrouter" selected>OpenRouter</option>
+                        <option value="google">Google Gemini</option>
+                        <option value="ollama">Ollama (Local/Custom)</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="grok">Grok (xAI)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key</label>
+                    <input type="password" name="api_key" class="form-control" placeholder="sk-..." required>
+                </div>
+                <button type="submit" class="btn btn-outline-info w-100">Encrypt & Store in Vault</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

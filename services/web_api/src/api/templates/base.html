@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}UKVI Credibility Interview System{% endblock %}</title>
+    <!-- Local Vendored Bootstrap (Zero CDN dependency) -->
+    <link rel="stylesheet" href="/static/vendor/bootstrap/css/bootstrap.min.css">
+    <style>
+        :root {
+            --ukvi-primary: #0d6efd;
+            --ukvi-bg: #0f172a;
+            --ukvi-card: #1e293b;
+        }
+        body {
+            background-color: var(--ukvi-bg);
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .card {
+            background-color: var(--ukvi-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        footer {
+            margin-top: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1rem 0;
+            color: #94a3b8;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary border-opacity-25 px-3">
+        <div class="container-fluid">
+            <a class="navbar-brand text-primary" href="/">🇬🇧 UKVI Credibility Interviewer</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% if user and user.role == "admin" %}
+                        <li class="nav-item"><a class="nav-link" href="/admin">Admin Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/admin/banks">Question Banks</a></li>
+                    {% elif user and user.role == "student" %}
+                        <li class="nav-item"><a class="nav-link" href="/student">Student Portal</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/student/interview">Live Interview</a></li>
+                    {% endif %}
+                </ul>
+                <div class="d-flex align-items-center gap-2">
+                    {% if user %}
+                        <span class="badge bg-secondary me-2">{{ user.username }} ({{ user.role }})</span>
+                        <a href="/auth/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+                    {% else %}
+                        <a href="/auth/login" class="btn btn-outline-primary btn-sm">Login</a>
+                        <a href="/auth/register" class="btn btn-primary btn-sm">Register</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container my-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-secondary small">
+        <div class="container">
+            UKVI Academic Credibility Voice Engine &bull; Self-Hosted LiveKit &bull; GitHub Spec Kit Governance
+        </div>
+    </footer>
+
+    <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Ensure client hardware/browser has a persistent device_id
+        if (!localStorage.getItem("ukvi_device_id")) {
+            localStorage.setItem("ukvi_device_id", "dev-" + crypto.randomUUID());
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

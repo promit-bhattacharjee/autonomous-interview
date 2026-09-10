@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Register - UKVI Credibility Interviewer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card p-4 shadow-sm">
+            <h3 class="card-title text-center mb-4">Student Registration</h3>
+            {% if error %}
+                <div class="alert alert-danger" role="alert">{{ error }}</div>
+            {% endif %}
+            <form action="/auth/register" method="POST" id="regForm">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">Email Address</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="full_name" class="form-label">Full Name (as on Passport)</label>
+                    <input type="text" class="form-control" id="full_name" name="full_name" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password (min 8 characters)</label>
+                    <input type="password" class="form-control" id="password" name="password" minlength="8" required>
+                </div>
+                <input type="hidden" id="reg_device_id" name="device_id">
+                <button type="submit" class="btn btn-primary w-100 py-2">Create Account</button>
+            </form>
+            <div class="text-center mt-3 small text-secondary">
+                Already registered? <a href="/auth/login" class="text-primary">Sign in here</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById("regForm").addEventListener("submit", function() {
+        document.getElementById("reg_device_id").value = localStorage.getItem("ukvi_device_id") || ("dev-" + crypto.randomUUID());
+    });
+</script>
+{% endblock %}

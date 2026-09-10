@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Login - UKVI Credibility Interviewer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card p-4 shadow-sm">
+            <h3 class="card-title text-center mb-4">Account Login</h3>
+            {% if error %}
+                <div class="alert alert-danger" role="alert">{{ error }}</div>
+            {% endif %}
+            <form action="/auth/login" method="POST" id="loginForm">
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username or Email</label>
+                    <input type="text" class="form-control" id="username" name="username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+                <!-- Hidden device_id injected from localStorage -->
+                <input type="hidden" id="device_id" name="device_id">
+                <button type="submit" class="btn btn-primary w-100 py-2">Sign In</button>
+            </form>
+            <div class="text-center mt-3 small text-secondary">
+                Don't have an account? <a href="/auth/register" class="text-primary">Register as a Student</a>
+            </div>
+            <div class="alert alert-info mt-3 p-2 small">
+                🔒 <strong>Single-Device Security:</strong> Logging in from a new browser or device will automatically terminate prior active sessions.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById("loginForm").addEventListener("submit", function() {
+        document.getElementById("device_id").value = localStorage.getItem("ukvi_device_id") || ("dev-" + crypto.randomUUID());
+    });
+</script>
+{% endblock %}
