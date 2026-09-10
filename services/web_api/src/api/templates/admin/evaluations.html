@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Candidate Credibility Evaluations Audit - Admin{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Top Action Bar -->
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <a href="/admin" class="text-decoration-none text-secondary small">&larr; Back to Admin Dashboard</a>
+                <h2 class="mb-0 mt-1">Candidate Credibility Evaluations Audit</h2>
+                <p class="text-secondary small mb-0">Admissions compliance audit trail for UKVI Home Office verification</p>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Export Audit Log 🖨️</button>
+        </div>
+    </div>
+
+    <!-- Evaluations Table -->
+    <div class="col-12">
+        <div class="card p-4 shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-striped mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Session ID</th>
+                            <th style="width: 20%;">Candidate</th>
+                            <th style="width: 20%;">Question Bank</th>
+                            <th style="width: 10%;">Score</th>
+                            <th style="width: 15%;">UKVI Status</th>
+                            <th style="width: 10%;">Lifecycle</th>
+                            <th style="width: 10%;" class="text-end">Completed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sessions %}
+                            <tr>
+                                <td><code>{{ s.id[:8] }}...</code></td>
+                                <td>
+                                    <strong>{{ s.student.full_name if s.student else 'Unknown' }}</strong>
+                                    <div class="small text-secondary">{{ s.student.user.username if s.student and s.student.user else '' }}</div>
+                                </td>
+                                <td>
+                                    <span class="small">{{ s.question_bank.title if s.question_bank else 'N/A' }}</span>
+                                    <div><span class="badge bg-secondary">{{ s.question_bank.difficulty.value if s.question_bank else '' }}</span></div>
+                                </td>
+                                <td>
+                                    {% if s.overall_score is not none %}
+                                        <span class="badge {% if s.overall_score >= 70 %}bg-success{% elif s.overall_score >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
+                                            {{ "%.1f"|format(s.overall_score) }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-secondary small">&mdash;</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if s.ukvi_recommendation == 'Genuine' %}
+                                        <span class="badge bg-success">Genuine (Pass)</span>
+                                    {% elif s.ukvi_recommendation == 'Inconclusive' %}
+                                        <span class="badge bg-warning text-dark">Inconclusive</span>
+                                    {% elif s.ukvi_recommendation == 'Not Genuine' %}
+                                        <span class="badge bg-danger">Not Genuine</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ s.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge {% if s.status == 'completed' %}bg-success{% elif s.status == 'discarded' %}bg-danger{% elif s.status == 'in_progress' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ s.status }}
+                                    </span>
+                                </td>
+                                <td class="text-end small text-secondary">
+                                    {{ s.concluded_at.strftime('%Y-%m-%d %H:%M') if s.concluded_at else 'In Progress' }}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center py-5 text-secondary">
+                                    <span class="fs-1 mb-2 d-block">📊</span>
+                                    No candidate interviews have been initiated yet.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

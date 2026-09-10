@@ -83,3 +83,120 @@ def trigger_generation_graph(
         curriculum_source=curriculum_text,
     )
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/banks/{bank_id}", response_class=HTMLResponse)
+def view_bank_tree(
+    bank_id: str,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    bank = question_service.get_full_bank_tree(db, bank_id)
+    if not bank:
+        return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+    return get_templates().TemplateResponse(
+        request=request,
+        name="admin/bank_detail.html",
+        context={
+            "user": admin_user,
+            "bank": bank,
+        },
+    )
+
+
+@router.post("/banks/{bank_id}/edit-question")
+def edit_question(
+    bank_id: str,
+    question_id: str = Form(...),
+    question_text: str = Form(...),
+    expected_time_to_ans: int = Form(45),
+    keywords_raw: str = Form(""),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+    question_service.update_question_record(
+        db=db,
+        question_id=question_id,
+        question_text=question_text,
+        expected_time_to_ans=expected_time_to_ans,
+        expected_answer_keywords=keywords,
+    )
+    return RedirectResponse(url=f"/admin/banks/{bank_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/banks/{bank_id}/edit-followup")
+def edit_followup(
+    bank_id: str,
+    followup_id: str = Form(...),
+    followup_text: str = Form(...),
+    expected_time_to_ans: int = Form(30),
+    keywords_raw: str = Form(""),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+    question_service.update_followup_record(
+        db=db,
+        followup_id=followup_id,
+        followup_text=followup_text,
+        expected_time_to_ans=expected_time_to_ans,
+        expected_answer_keywords=keywords,
+    )
+    return RedirectResponse(url=f"/admin/banks/{bank_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/banks/{bank_id}/add-followup")
+def add_followup(
+    bank_id: str,
+    question_id: str = Form(...),
+    followup_text: str = Form(...),
+    expected_time_to_ans: int = Form(30),
+    keywords_raw: str = Form(""),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    keywords = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+    question_service.add_followup_to_question(
+        db=db,
+        question_id=question_id,
+        followup_text=followup_text,
+        expected_time_to_ans=expected_time_to_ans,
+        expected_answer_keywords=keywords,
+    )
+    return RedirectResponse(url=f"/admin/banks/{bank_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/banks/{bank_id}/toggle-active")
+def toggle_bank_status(
+    bank_id: str,
+    is_active: bool = Form(...),
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    question_service.toggle_bank_active(db, bank_id=bank_id, is_active=is_active)
+    return RedirectResponse(url=f"/admin/banks/{bank_id}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/evaluations", response_class=HTMLResponse)
+def list_evaluations(
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from src.api.db.models import InterviewSessionRecord
+    sessions = (
+        db.query(InterviewSessionRecord)
+        .order_by(InterviewSessionRecord.created_at.desc())
+        .all()
+    )
+    return get_templates().TemplateResponse(
+        request=request,
+        name="admin/evaluations.html",
+        context={
+            "user": admin_user,
+            "sessions": sessions,
+        },
+    )

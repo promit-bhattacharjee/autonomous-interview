@@ -81,7 +81,7 @@ class TestAuthenticationRoutes:
 
 
 class TestPreAssignmentGateAndRelationalEndpoints:
-    def test_pre_assignment_gate_blocks_interview_without_bank(self):
+    def test_pre_assignment_gate_blocks_token_without_bank(self):
         db = TestingSessionLocal()
         user = User(
             username="candidate1",
@@ -96,12 +96,16 @@ class TestPreAssignmentGateAndRelationalEndpoints:
         token = create_access_token(user_id=user.id, role="student", device_id="dev-123")
         client.cookies.set("access_token", token)
 
-        # Pre-interview check must reject with 403 because no bank is assigned
-        res = client.get("/student/interview")
+        # Pre-interview token check must reject with 403 because no bank is assigned
+        res = client.get("/student/token")
         assert res.status_code == 403
         assert "Pre-Assignment Gate" in res.json()["detail"]
 
-    def test_pre_assignment_gate_allows_interview_when_bank_assigned(self):
+        # Interview HTML route redirects to dashboard with error
+        interview_res = client.get("/student/interview", follow_redirects=False)
+        assert interview_res.status_code == 303
+
+    def test_pre_assignment_gate_allows_interview_and_mints_token_when_bank_assigned(self):
         db = TestingSessionLocal()
         user = User(
             username="candidate2",
@@ -129,10 +133,125 @@ class TestPreAssignmentGateAndRelationalEndpoints:
         token = create_access_token(user_id=user.id, role="student", device_id="dev-456")
         client.cookies.set("access_token", token)
 
-        res = client.get("/student/interview")
+        # Token minting endpoint
+        res = client.get("/student/token")
         assert res.status_code == 200
-        assert res.json()["status"] == "ready"
-        assert res.json()["bank_id"] == bank.id
+        data = res.json()
+        assert "token" in data
+        assert data["room_name"] == f"room-{user.id}"
+        assert data["bank_title"] == bank.title
+
+        # WebRTC interview HTML screen
+        html_res = client.get("/student/interview")
+        assert html_res.status_code == 200
+        assert "UKVI Credibility Voice Interview" in html_res.text
+        assert "livekit-client.umd.min.js" in html_res.text
+
+    def test_student_results_viewer_flow(self):
+        db = TestingSessionLocal()
+        user = User(
+            username="candidate3",
+            email="cand3@test.com",
+            hashed_password=hash_password("Pass123!"),
+            role=UserRole.STUDENT,
+            active_device_id="dev-789",
+        )
+        db.add(user)
+        db.flush()
+
+        profile = StudentProfile(user_id=user.id, full_name="Candidate Three", tuition_fee_gbp=15000, available_funds_gbp=30000)
+        db.add(profile)
+
+        bank = question_service.create_question_bank_from_payload(
+            db=db,
+            title="Results Test Bank",
+            difficulty="Easy",
+            university_id=None,
+            topics_payload=[{"name": "General", "questions": [{"question_text": "Q1"}]}],
+        )
+
+        from src.api.db.models import InterviewSessionRecord
+        session_rec = InterviewSessionRecord(
+            student_id=profile.id,
+            bank_id=bank.id,
+            room_name=f"room-{user.id}",
+            status="completed",
+            overall_score=88.5,
+            ukvi_recommendation="Genuine",
+            report_json='{"recommendation": "Candidate meets UKVI standards.", "strengths": ["Clear spoken responses"]}',
+        )
+        db.add(session_rec)
+        db.commit()
+
+        token = create_access_token(user_id=user.id, role="student", device_id="dev-789")
+        client.cookies.set("access_token", token)
+
+        res = client.get("/student/results")
+        assert res.status_code == 200
+        assert "Official UKVI Credibility Report" in res.text
+        assert "88.5%" in res.text
+        assert "Genuine" in res.text
+
+    def test_admin_bank_tree_editor_and_evaluations(self):
+        db = TestingSessionLocal()
+        admin_user = User(
+            username="admin_lead",
+            email="admin@test.com",
+            hashed_password=hash_password("AdminPass123!"),
+            role=UserRole.ADMIN,
+            active_device_id="admin-dev-1",
+        )
+        db.add(admin_user)
+        db.flush()
+
+        bank = question_service.create_question_bank_from_payload(
+            db=db,
+            title="Admin Tree Bank",
+            difficulty="Hard",
+            university_id=None,
+            topics_payload=[
+                {
+                    "name": "Finance",
+                    "questions": [
+                        {
+                            "question_text": "Show your 28-day bank balance?",
+                            "followups": [{"followup_text": "Who is your sponsor?"}],
+                        }
+                    ],
+                }
+            ],
+        )
+        db.commit()
+
+        admin_token = create_access_token(user_id=admin_user.id, role="admin", device_id="admin-dev-1")
+        client.cookies.set("access_token", admin_token)
+
+        # 1. View Bank Tree
+        tree_res = client.get(f"/admin/banks/{bank.id}")
+        assert tree_res.status_code == 200
+        assert "Question Bank Tree Editor" in tree_res.text
+        assert "Admin Tree Bank" in tree_res.text
+        assert "Show your 28-day bank balance?" in tree_res.text
+
+        # 2. Edit Question
+        q_record = bank.topics[0].questions[0]
+        edit_res = client.post(
+            f"/admin/banks/{bank.id}/edit-question",
+            data={
+                "question_id": q_record.id,
+                "question_text": "Updated Question: Show your 28-day bank balance?",
+                "expected_time_to_ans": 50,
+                "keywords_raw": "funds, balance, maintenance",
+            },
+            follow_redirects=True,
+        )
+        assert edit_res.status_code == 200
+        assert "Updated Question: Show your 28-day bank balance?" in edit_res.text
+
+        # 3. View Evaluations List
+        eval_res = client.get("/admin/evaluations")
+        assert eval_res.status_code == 200
+        assert "Candidate Credibility Evaluations Audit" in eval_res.text
 
     def test_relational_endpoints_hierarchy(self):
         db = TestingSessionLocal()

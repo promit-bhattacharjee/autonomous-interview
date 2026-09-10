@@ -4,11 +4,13 @@ from sqlalchemy.orm import Session
 from src.api.db.models import (
     DifficultyTier,
     FollowupRecord,
+    InterviewSessionRecord,
     QuestionAssignment,
     QuestionBank,
     QuestionRecord,
     StudentProfile,
     TopicRecord,
+    TurnEvaluationRecord,
 )
 
 
@@ -204,3 +206,128 @@ def create_question_bank_from_payload(
     db.commit()
     db.refresh(bank)
     return bank
+
+
+def get_full_bank_tree(db: Session, bank_id: str) -> Optional[QuestionBank]:
+    """Retrieves a question bank with its complete nested topic, question, and follow-up tree."""
+    return db.query(QuestionBank).filter(QuestionBank.id == bank_id).first()
+
+
+def update_question_record(
+    db: Session,
+    question_id: str,
+    question_text: str,
+    expected_time_to_ans: int = 45,
+    expected_answer_keywords: Optional[list[str]] = None,
+) -> Optional[QuestionRecord]:
+    """Updates question prompt text, duration limit, and expected keywords."""
+    record = db.query(QuestionRecord).filter(QuestionRecord.id == question_id).first()
+    if not record:
+        return None
+    record.question_text = question_text
+    record.expected_time_to_ans = expected_time_to_ans
+    if expected_answer_keywords is not None:
+        record.expected_answer_keywords_json = json.dumps(expected_answer_keywords)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def update_followup_record(
+    db: Session,
+    followup_id: str,
+    followup_text: str,
+    expected_time_to_ans: int = 30,
+    expected_answer_keywords: Optional[list[str]] = None,
+) -> Optional[FollowupRecord]:
+    """Updates follow-up probe prompt text, duration limit, and expected keywords."""
+    record = db.query(FollowupRecord).filter(FollowupRecord.id == followup_id).first()
+    if not record:
+        return None
+    record.followup_text = followup_text
+    record.expected_time_to_ans = expected_time_to_ans
+    if expected_answer_keywords is not None:
+        record.expected_answer_keywords_json = json.dumps(expected_answer_keywords)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def add_followup_to_question(
+    db: Session,
+    question_id: str,
+    followup_text: str,
+    expected_time_to_ans: int = 30,
+    expected_answer_keywords: Optional[list[str]] = None,
+) -> Optional[FollowupRecord]:
+    """Adds a new follow-up probe to an existing question."""
+    q_record = db.query(QuestionRecord).filter(QuestionRecord.id == question_id).first()
+    if not q_record:
+        return None
+    order = len(q_record.followups) + 1
+    followup = FollowupRecord(
+        question_id=question_id,
+        followup_text=followup_text,
+        expected_time_to_ans=expected_time_to_ans,
+        expected_answer_keywords_json=json.dumps(expected_answer_keywords or []),
+        order=order,
+    )
+    db.add(followup)
+    db.commit()
+    db.refresh(followup)
+    return followup
+
+
+def toggle_bank_active(db: Session, bank_id: str, is_active: bool = True) -> Optional[QuestionBank]:
+    """Toggles active/confirmed status of a QuestionBank."""
+    bank = db.query(QuestionBank).filter(QuestionBank.id == bank_id).first()
+    if not bank:
+        return None
+    bank.is_active = is_active
+    db.commit()
+    db.refresh(bank)
+    return bank
+
+
+def record_completed_session(
+    db: Session,
+    session_id: str,
+    overall_score: float,
+    ukvi_recommendation: str,
+    report_data: dict[str, Any],
+    turns_data: Optional[list[dict[str, Any]]] = None,
+) -> Optional[InterviewSessionRecord]:
+    """
+    Persists a normally concluded interview session with overall score,
+    UKVI recommendation, full report JSON, and optional turn audit records.
+    """
+    from datetime import datetime, timezone
+
+    session = db.query(InterviewSessionRecord).filter(InterviewSessionRecord.id == session_id).first()
+    if not session:
+        return None
+
+    session.status = "completed"
+    session.overall_score = overall_score
+    session.ukvi_recommendation = ukvi_recommendation
+    session.report_json = json.dumps(report_data)
+    session.concluded_at = datetime.now(timezone.utc)
+
+    if turns_data:
+        for t in turns_data:
+            turn_record = TurnEvaluationRecord(
+                session_id=session.id,
+                turn_type=t.get("turn_type", "question"),
+                reference_id=t.get("reference_id", "q-unknown"),
+                spoken_prompt=t.get("spoken_prompt", ""),
+                candidate_transcript=t.get("candidate_transcript", ""),
+                score=float(t.get("score", 0.0)),
+                rubric_hits_json=json.dumps(t.get("matched_keywords", [])),
+                missed_keywords_json=json.dumps(t.get("missed_keywords", [])),
+                latency_ms=int(t.get("latency_ms", 0)),
+            )
+            db.add(turn_record)
+
+    db.commit()
+    db.refresh(session)
+    return session

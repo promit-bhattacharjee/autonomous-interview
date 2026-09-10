@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Question Bank Tree Editor - {{ bank.title }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Top Action Bar -->
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+                <a href="/admin" class="text-decoration-none text-secondary small">&larr; Back to Admin Dashboard</a>
+                <h2 class="mb-0 mt-1">{{ bank.title }}</h2>
+                <p class="text-secondary small mb-0">Tier: <span class="badge bg-info text-dark">{{ bank.difficulty.value }}</span> &bull; Version: {{ bank.version }}</p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                {% if bank.is_active %}
+                    <span class="badge bg-success px-3 py-2 fs-6">Active & Confirmed</span>
+                    <form action="/admin/banks/{{ bank.id }}/toggle-active" method="POST" class="d-inline">
+                        <input type="hidden" name="is_active" value="false">
+                        <button type="submit" class="btn btn-outline-warning btn-sm">Set to Inactive</button>
+                    </form>
+                {% else %}
+                    <span class="badge bg-secondary px-3 py-2 fs-6">Draft / Inactive</span>
+                    <form action="/admin/banks/{{ bank.id }}/toggle-active" method="POST" class="d-inline">
+                        <input type="hidden" name="is_active" value="true">
+                        <button type="submit" class="btn btn-success btn-sm">Confirm & Activate Bank</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Topics & Questions Tree -->
+    <div class="col-12">
+        {% for topic in bank.topics %}
+            <div class="card p-4 mb-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <span class="badge bg-secondary mb-1">Topic {{ topic.order }}</span>
+                        <h4 class="mb-0 text-info">{{ topic.name }}</h4>
+                        {% if topic.description %}
+                            <p class="text-secondary small mb-0">{{ topic.description }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Questions in Topic -->
+                <div class="ms-3">
+                    {% for q in topic.questions %}
+                        <div class="card bg-dark bg-opacity-50 border-secondary border-opacity-25 p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <span class="badge bg-primary">Q{{ q.order }}</span>
+                                        <span class="badge bg-dark border border-secondary text-secondary">⏱️ {{ q.expected_time_to_ans }}s limit</span>
+                                    </div>
+                                    <h5 class="text-light fw-normal mb-2">{{ q.question_text }}</h5>
+                                    
+                                    <!-- Expected keywords -->
+                                    <div class="mb-3">
+                                        <span class="small text-secondary me-2">Expected Rubric Keywords:</span>
+                                        <code class="text-info small">{{ q.expected_answer_keywords_json }}</code>
+                                    </div>
+                                </div>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#editQ_{{ q.id }}">
+                                    ✏️ Edit
+                                </button>
+                            </div>
+
+                            <!-- Collapse Edit Form for Question -->
+                            <div class="collapse mt-2 mb-3" id="editQ_{{ q.id }}">
+                                <div class="card card-body bg-dark border-secondary p-3">
+                                    <form action="/admin/banks/{{ bank.id }}/edit-question" method="POST">
+                                        <input type="hidden" name="question_id" value="{{ q.id }}">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Question Prompt</label>
+                                            <textarea name="question_text" class="form-control form-control-sm" rows="2" required>{{ q.question_text }}</textarea>
+                                        </div>
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-md-3">
+                                                <label class="form-label small">Timer (sec)</label>
+                                                <input type="number" name="expected_time_to_ans" class="form-control form-control-sm" value="{{ q.expected_time_to_ans }}" required>
+                                            </div>
+                                            <div class="col-md-9">
+                                                <label class="form-label small">Expected Keywords (comma-separated)</label>
+                                                <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ q.expected_answer_keywords_json|replace('[\"', '')|replace('\"]', '')|replace('\"', '') }}">
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm">Save Question</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Nested Follow-up Probes -->
+                            <div class="ms-4 ps-2 border-start border-secondary border-opacity-50 mt-2">
+                                <h6 class="text-uppercase text-secondary small mb-2">Follow-up Probes</h6>
+                                {% for f in q.followups %}
+                                    <div class="p-2 mb-2 rounded bg-black bg-opacity-25 border border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="badge bg-secondary me-2">Follow-up {{ f.order }}</span>
+                                            <span class="text-light small">{{ f.followup_text }}</span>
+                                            <span class="badge bg-dark border border-secondary text-secondary ms-2">⏱️ {{ f.expected_time_to_ans }}s</span>
+                                        </div>
+                                        <button class="btn btn-sm btn-link text-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editF_{{ f.id }}">Edit</button>
+                                    </div>
+
+                                    <!-- Collapse Edit Form for Follow-up -->
+                                    <div class="collapse mb-2" id="editF_{{ f.id }}">
+                                        <div class="card card-body bg-dark border-secondary p-2">
+                                            <form action="/admin/banks/{{ bank.id }}/edit-followup" method="POST">
+                                                <input type="hidden" name="followup_id" value="{{ f.id }}">
+                                                <div class="mb-2">
+                                                    <input type="text" name="followup_text" class="form-control form-control-sm" value="{{ f.followup_text }}" required>
+                                                </div>
+                                                <div class="row g-2 mb-2">
+                                                    <div class="col-md-3">
+                                                        <input type="number" name="expected_time_to_ans" class="form-control form-control-sm" value="{{ f.expected_time_to_ans }}" required>
+                                                    </div>
+                                                    <div class="col-md-9">
+                                                        <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ f.expected_answer_keywords_json|replace('[\"', '')|replace('\"]', '')|replace('\"', '') }}">
+                                                    </div>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-sm">Save Follow-up</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <p class="small text-secondary mb-2 fst-italic">No follow-up probes configured.</p>
+                                {% endfor %}
+
+                                <!-- Add Followup Accordion Button -->
+                                <button class="btn btn-outline-secondary btn-sm py-0 mt-1" type="button" data-bs-toggle="collapse" data-bs-target="#addF_{{ q.id }}">
+                                    + Add Follow-up Probe
+                                </button>
+                                <div class="collapse mt-2" id="addF_{{ q.id }}">
+                                    <div class="card card-body bg-dark border-secondary p-2">
+                                        <form action="/admin/banks/{{ bank.id }}/add-followup" method="POST">
+                                            <input type="hidden" name="question_id" value="{{ q.id }}">
+                                            <div class="mb-2">
+                                                <label class="form-label small">Follow-up Probe Text</label>
+                                                <input type="text" name="followup_text" class="form-control form-control-sm" placeholder="e.g. Can you explain how this relates to your career in Bangladesh?" required>
+                                            </div>
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-md-3">
+                                                    <label class="form-label small">Timer (sec)</label>
+                                                    <input type="number" name="expected_time_to_ans" class="form-control form-control-sm" value="30" required>
+                                                </div>
+                                                <div class="col-md-9">
+                                                    <label class="form-label small">Expected Keywords (comma-separated)</label>
+                                                    <input type="text" name="keywords_raw" class="form-control form-control-sm" placeholder="e.g. career, employment, market">
+                                                </div>
+                                            </div>
+                                            <button type="submit" class="btn btn-success btn-sm">Add Probe</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% else %}
+            <div class="card p-5 text-center shadow-sm">
+                <span class="fs-1 mb-2">📁</span>
+                <h4>No Topics in this Question Bank</h4>
+                <p class="text-secondary">Topics will populate when generated or added by the administrator.</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

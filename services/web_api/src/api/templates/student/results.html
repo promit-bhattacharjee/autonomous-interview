@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}UKVI Credibility Evaluation Report - {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="row g-4 justify-content-center">
+    <div class="col-lg-10">
+        <!-- Action Header -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <a href="/student" class="text-decoration-none text-secondary small">&larr; Back to Dashboard</a>
+                <h2 class="mb-0 mt-1">Official UKVI Credibility Report</h2>
+                <p class="text-secondary small mb-0">Evaluation record generated under Home Office Credibility Framework guidelines</p>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print / Export PDF 🖨️</button>
+        </div>
+
+        {% if not session %}
+            <div class="card p-5 text-center shadow-sm">
+                <span class="fs-1 mb-2">📋</span>
+                <h4>No Completed Evaluation Found</h4>
+                <p class="text-secondary">You have not concluded an interview session yet. Once you complete your live interview, your full assessment scorecard will appear here.</p>
+                <a href="/student" class="btn btn-primary mt-2">Go to Dashboard</a>
+            </div>
+        {% else %}
+            <!-- Summary Assessment Banner -->
+            <div class="card p-4 mb-4 shadow-sm border-2 {% if session.ukvi_recommendation == 'Genuine' %}border-success{% elif session.ukvi_recommendation == 'Inconclusive' %}border-warning{% else %}border-danger{% endif %}">
+                <div class="row align-items-center g-3">
+                    <div class="col-md-3 text-center border-end border-secondary border-opacity-25">
+                        <span class="text-secondary text-uppercase small">Overall Score</span>
+                        <h1 class="display-4 fw-bold {% if session.ukvi_recommendation == 'Genuine' %}text-success{% elif session.ukvi_recommendation == 'Inconclusive' %}text-warning{% else %}text-danger{% endif %} mb-0">
+                            {{ "%.1f"|format(session.overall_score or 0.0) }}%
+                        </h1>
+                        <span class="badge {% if session.ukvi_recommendation == 'Genuine' %}bg-success{% elif session.ukvi_recommendation == 'Inconclusive' %}bg-warning text-dark{% else %}bg-danger{% endif %} mt-1">
+                            {{ session.ukvi_recommendation or 'Evaluated' }}
+                        </span>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h4 class="mb-1">
+                                {% if session.ukvi_recommendation == 'Genuine' %}
+                                    <span class="text-success">✅ Visa Credibility Standards Satisfied</span>
+                                {% elif session.ukvi_recommendation == 'Inconclusive' %}
+                                    <span class="text-warning">⚠️ Secondary Examination Recommended</span>
+                                {% else %}
+                                    <span class="text-danger">❌ Significant Credibility Deficiencies Identified</span>
+                                {% endif %}
+                            </h4>
+                            <span class="text-secondary small">Completed: {{ session.concluded_at.strftime('%Y-%m-%d %H:%M UTC') if session.concluded_at else 'Recent' }}</span>
+                        </div>
+                        <p class="text-light mb-0">
+                            {% if report and report.recommendation %}
+                                {{ report.recommendation }}
+                            {% else %}
+                                The candidate underwent multi-topic questioning covering Academic Alignment, Financial Longevity, and Career Trajectory.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Candidate Profile & Financial Verification -->
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card p-3 h-100 shadow-sm">
+                        <h5 class="card-title text-info mb-3">Candidate & Academic Credentials</h5>
+                        <ul class="list-group list-group-flush bg-transparent">
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>Candidate Legal Name:</span>
+                                <strong class="text-light">{{ profile.full_name }}</strong>
+                            </li>
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>Student Reference ID:</span>
+                                <strong class="text-light">{{ user.username }}</strong>
+                            </li>
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>Academic Background:</span>
+                                <span class="text-light text-end" style="max-width: 60%;">{{ profile.academic_background }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card p-3 h-100 shadow-sm">
+                        <h5 class="card-title text-info mb-3">Financial Credibility & Maintenance</h5>
+                        <ul class="list-group list-group-flush bg-transparent">
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>Course Tuition Fee:</span>
+                                <strong class="text-light">£{{ "{:,.2f}".format(profile.tuition_fee_gbp) }}</strong>
+                            </li>
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>Verified Bank Balance:</span>
+                                <strong class="text-success">£{{ "{:,.2f}".format(profile.available_funds_gbp) }}</strong>
+                            </li>
+                            <li class="list-group-item bg-transparent text-secondary d-flex justify-content-between">
+                                <span>28-Day Holding Verification:</span>
+                                <span class="text-light text-end" style="max-width: 60%;">{{ profile.sponsor_details }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Strengths & Areas for Improvement -->
+            {% if report %}
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card p-3 h-100 shadow-sm border-success border-opacity-50">
+                            <h5 class="text-success mb-2">Key Candidate Strengths</h5>
+                            <ul class="mb-0 ps-3">
+                                {% for item in report.strengths %}
+                                    <li class="text-light py-1">{{ item }}</li>
+                                {% else %}
+                                    <li class="text-secondary">Consistent explanation of university curriculum modules.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card p-3 h-100 shadow-sm border-warning border-opacity-50">
+                            <h5 class="text-warning mb-2">Areas for Improvement</h5>
+                            <ul class="mb-0 ps-3">
+                                {% for item in report.areas_for_improvement %}
+                                    <li class="text-light py-1">{{ item }}</li>
+                                {% else %}
+                                    <li class="text-secondary">Could provide deeper specifics on post-graduation employment return.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Turn-by-Turn Examination Transcript Audit -->
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="card-title text-info mb-3">Turn-by-Turn Examination Transcript & Rubric Audit</h5>
+                {% if turns %}
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-striped mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%;">#</th>
+                                    <th style="width: 15%;">Turn Type</th>
+                                    <th style="width: 35%;">Spoken Question Prompt</th>
+                                    <th style="width: 30%;">Candidate Transcript</th>
+                                    <th style="width: 15%;" class="text-end">Rubric Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for turn in turns %}
+                                    <tr>
+                                        <td>{{ loop.index }}</td>
+                                        <td>
+                                            <span class="badge {% if turn.turn_type == 'question' %}bg-primary{% elif turn.turn_type == 'followup' %}bg-info text-dark{% else %}bg-warning text-dark{% endif %}">
+                                                {{ turn.turn_type }}
+                                            </span>
+                                        </td>
+                                        <td class="small">{{ turn.spoken_prompt }}</td>
+                                        <td class="small text-secondary fst-italic">{{ turn.candidate_transcript or '(No audible response)' }}</td>
+                                        <td class="text-end">
+                                            <span class="badge {% if turn.score >= 70 %}bg-success{% elif turn.score >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
+                                                {{ "%.1f"|format(turn.score) }}%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-secondary small mb-0">No individual turn records were recorded for this session.</p>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

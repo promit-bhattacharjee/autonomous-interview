@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}Live Voice Interview - UKVI Credibility{% endblock %}
+
+{% block extra_head %}
+<style>
+    .audio-visualizer {
+        width: 100%;
+        height: 80px;
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .mic-pulse {
+        animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+        0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.6); }
+        70% { box-shadow: 0 0 0 15px rgba(13, 110, 253, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+    }
+    .chip {
+        display: inline-block;
+        padding: 0.25rem 0.65rem;
+        border-radius: 50rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .chip-matched {
+        background-color: rgba(25, 135, 84, 0.2);
+        color: #75b798;
+        border: 1px solid rgba(25, 135, 84, 0.4);
+    }
+    .chip-unmatched {
+        background-color: rgba(220, 53, 69, 0.15);
+        color: #ea868f;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4 justify-content-center">
+    <!-- Top Header -->
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <a href="/student" class="text-decoration-none text-secondary small">&larr; Back to Dashboard</a>
+                <h3 class="mb-0 mt-1">UKVI Credibility Voice Interview</h3>
+                <p class="text-secondary small mb-0">Bank: <strong>{{ assigned_bank.title }}</strong> &bull; Tier: <span class="badge bg-info text-dark">{{ assigned_bank.difficulty }}</span></p>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span id="connectionBadge" class="badge bg-warning text-dark px-3 py-2 fs-6">Initializing...</span>
+                <button id="leaveBtn" class="btn btn-outline-danger btn-sm" onclick="disconnectRoom()">Leave Session</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Voice & Question Area -->
+    <div class="col-lg-10">
+        <div class="row g-4">
+            <!-- Left: Current Question & Mic -->
+            <div class="col-md-7">
+                <div class="card p-4 h-100 shadow-sm border-primary border-opacity-50">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span id="topicBadge" class="badge bg-secondary">Topic 1 of {{ assigned_bank.topics|length }}</span>
+                        <span id="timerBadge" class="badge bg-dark border border-secondary text-info">Timer: Ready</span>
+                    </div>
+
+                    <div class="mb-4">
+                        <h6 class="text-uppercase text-secondary small mb-2">Interviewer Prompt</h6>
+                        <h4 id="questionPrompt" class="text-light fw-normal" style="min-height: 90px; line-height: 1.5;">
+                            Connecting to LiveKit media server and preparing your first credibility examination question...
+                        </h4>
+                    </div>
+
+                    <!-- Audio Waveform Visualizer -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small text-secondary">Candidate Audio Waveform</span>
+                            <span id="micStatusText" class="small text-success">Mic Active</span>
+                        </div>
+                        <canvas id="waveformCanvas" class="audio-visualizer"></canvas>
+                    </div>
+
+                    <!-- Mic Controls -->
+                    <div class="d-flex justify-content-center align-items-center gap-3 mt-2">
+                        <button id="toggleMicBtn" class="btn btn-primary btn-lg rounded-circle p-3 mic-pulse" onclick="toggleMicrophone()" style="width: 64px; height: 64px;">
+                            🎙️
+                        </button>
+                        <button id="startSessionBtn" class="btn btn-success px-4 py-2" onclick="connectToInterview()">
+                            Join WebRTC Room
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Real-time Live Turn Scorecard -->
+            <div class="col-md-5">
+                <div class="card p-4 h-100 shadow-sm">
+                    <h5 class="card-title text-info mb-3">Real-Time Turn Scorecard</h5>
+                    <p class="small text-secondary mb-3">Evaluations are streamed over native WebRTC DataChannels directly as you speak.</p>
+
+                    <div id="scorecardBody">
+                        <div class="text-center py-4 text-secondary">
+                            <span class="fs-1 mb-2 d-block">📊</span>
+                            <p class="mb-0">Waiting for candidate response...</p>
+                        </div>
+                    </div>
+
+                    <!-- Final Completion Alert (Hidden by default) -->
+                    <div id="finalReportCard" class="card bg-success bg-opacity-10 border-success p-3 mt-3 d-none">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <h6 class="text-success mb-1">Interview Concluded</h6>
+                                <p class="small text-light mb-0" id="finalRecommendationText">UKVI report generated.</p>
+                            </div>
+                            <a href="/student/results" class="btn btn-success btn-sm">View Full CAS Report</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Audio element for AI synthesized speech -->
+<audio id="interviewerAudio" autoplay></audio>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Local Vendored LiveKit Client (Zero external CDN dependency) -->
+<script src="/static/vendor/livekit/livekit-client.umd.min.js"></script>
+
+<script>
+    let currentRoom = null;
+    let isMicEnabled = true;
+    let audioContext = null;
+    let analyser = null;
+    let animationId = null;
+
+    // Connect to room when user clicks or page mounts
+    async function connectToInterview() {
+        const badge = document.getElementById("connectionBadge");
+        const startBtn = document.getElementById("startSessionBtn");
+        startBtn.disabled = true;
+        badge.className = "badge bg-info text-dark px-3 py-2 fs-6";
+        badge.innerText = "Requesting Token...";
+
+        try {
+            // 1. Fetch token and room coordinates from FastAPI
+            const res = await fetch("/student/token");
+            if (!res.ok) {
+                const err = await res.json();
+                alert("Gate Error: " + (err.detail || "Cannot start interview"));
+                badge.className = "badge bg-danger px-3 py-2 fs-6";
+                badge.innerText = "Gate Blocked";
+                return;
+            }
+            const tokenData = await res.json();
+            badge.innerText = "Connecting WebRTC...";
+
+            // 2. Initialize LiveKit Room using vendored LivekitClient
+            const { Room, RoomEvent, Track } = LivekitClient;
+            currentRoom = new Room({
+                adaptiveStream: true,
+                dynacast: true,
+            });
+
+            // 3. Audio track subscription
+            currentRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                if (track.kind === Track.Kind.Audio) {
+                    const audioElement = document.getElementById("interviewerAudio");
+                    track.attach(audioElement);
+                    console.log("[LiveKit] Subscribed to interviewer audio track.");
+                }
+            });
+
+            // 4. DataChannel messages for real-time scorecard and prompts
+            currentRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+                try {
+                    const text = new TextDecoder().decode(payload);
+                    const msg = JSON.parse(text);
+                    handleDataChannelMessage(msg);
+                } catch (e) {
+                    console.error("[DataChannel] Failed to parse message:", e);
+                }
+            });
+
+            // 5. Disconnect Guard
+            currentRoom.on(RoomEvent.Disconnected, () => {
+                badge.className = "badge bg-danger px-3 py-2 fs-6";
+                badge.innerText = "Disconnected";
+                document.getElementById("micStatusText").innerText = "Offline";
+                document.getElementById("toggleMicBtn").classList.remove("mic-pulse");
+            });
+
+            // 6. Connect to LiveKit server
+            await currentRoom.connect(tokenData.livekit_url, tokenData.token);
+            badge.className = "badge bg-success px-3 py-2 fs-6";
+            badge.innerText = "Connected 🟢";
+            startBtn.classList.add("d-none");
+
+            // 7. Enable microphone and start waveform canvas
+            await currentRoom.localParticipant.setMicrophoneEnabled(true);
+            initAudioVisualizer();
+
+        } catch (error) {
+            console.error("[LiveKit] Connection failed:", error);
+            badge.className = "badge bg-danger px-3 py-2 fs-6";
+            badge.innerText = "Connection Failed";
+            startBtn.disabled = false;
+        }
+    }
+
+    // Process incoming WebRTC DataChannel packets
+    function handleDataChannelMessage(msg) {
+        console.log("[DataChannel Message Received]:", msg);
+
+        if (msg.type === "session_ready") {
+            document.getElementById("questionPrompt").innerText = 
+                "Session authorized. The AI examiner will speak your first credibility question shortly...";
+        } else if (msg.type === "question") {
+            document.getElementById("questionPrompt").innerText = msg.prompt || msg.question_text;
+            if (msg.topic_name) {
+                document.getElementById("topicBadge").innerText = msg.topic_name;
+            }
+        } else if (msg.type === "turn_evaluation") {
+            updateScorecard(msg.data || msg);
+        } else if (msg.type === "final_evaluation") {
+            renderFinalReport(msg.final_evaluation || msg);
+        }
+    }
+
+    function updateScorecard(data) {
+        const score = data.accuracy_score !== undefined ? data.accuracy_score : (data.score || 0);
+        const isPassed = data.is_passed;
+        const isReask = data.is_reask;
+        const matched = data.matched_keywords || [];
+        const feedback = data.feedback || "Answer evaluated.";
+
+        const card = document.getElementById("scorecardBody");
+        card.innerHTML = `
+            <div class="p-3 rounded mb-3 ${isPassed ? 'bg-success' : (isReask ? 'bg-warning text-dark' : 'bg-danger')} bg-opacity-25 border ${isPassed ? 'border-success' : (isReask ? 'border-warning' : 'border-danger')}">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">${isPassed ? '✅ Passed (≥ 70%)' : (isReask ? '⚠️ Re-Ask Probing' : '❌ Needs Improvement')}</span>
+                    <span class="badge ${isPassed ? 'bg-success' : (isReask ? 'bg-warning text-dark' : 'bg-danger')} fs-6">${score.toFixed(1)}%</span>
+                </div>
+                <p class="small mb-2">${feedback}</p>
+                <div class="d-flex flex-wrap gap-1 mt-2">
+                    ${matched.map(k => `<span class="chip chip-matched">✓ ${k}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderFinalReport(finalData) {
+        const reportCard = document.getElementById("finalReportCard");
+        reportCard.classList.remove("d-none");
+        const recText = document.getElementById("finalRecommendationText");
+        recText.innerText = `Score: ${finalData.overall_score || 0}% • Status: ${finalData.overall_status || 'Complete'}`;
+    }
+
+    async function toggleMicrophone() {
+        if (!currentRoom) return;
+        isMicEnabled = !isMicEnabled;
+        await currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled);
+        const btn = document.getElementById("toggleMicBtn");
+        const text = document.getElementById("micStatusText");
+        if (isMicEnabled) {
+            btn.classList.add("btn-primary", "mic-pulse");
+            btn.classList.remove("btn-secondary");
+            btn.innerText = "🎙️";
+            text.innerText = "Mic Active";
+            text.className = "small text-success";
+        } else {
+            btn.classList.remove("btn-primary", "mic-pulse");
+            btn.classList.add("btn-secondary");
+            btn.innerText = "🔇";
+            text.innerText = "Mic Muted";
+            text.className = "small text-warning";
+        }
+    }
+
+    function disconnectRoom() {
+        if (currentRoom) {
+            currentRoom.disconnect();
+            currentRoom = null;
+        }
+        if (animationId) cancelAnimationFrame(animationId);
+        window.location.href = "/student";
+    }
+
+    // Audio Waveform Animation via Web Audio API
+    async function initAudioVisualizer() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 128;
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+
+            const canvas = document.getElementById("waveformCanvas");
+            const ctx = canvas.getContext("2d");
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function draw() {
+                animationId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = "rgba(15, 23, 42, 0.4)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 1.5;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    ctx.fillStyle = isMicEnabled ? "#0d6efd" : "#6c757d";
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                }
+            }
+            draw();
+        } catch (e) {
+            console.warn("Visualizer audio context error:", e);
+        }
+    }
+</script>
+{% endblock %}
