@@ -26,6 +26,7 @@ from interview.state import (
     SuggestedFollowupState,
     TopicEvaluationSummary,
     TopicState,
+    FollowupItem,
     UniversityData,
 )
 from interview.graph import create_interview_graph, route_after_ask, route_start
@@ -59,6 +60,33 @@ class TestDecomposedStatesAndMockApi(unittest.TestCase):
         self.assertEqual(univ.tuition_fee_gbp, 16500.0)
         self.assertEqual(len(univ.core_modules), 3)
         print("✅ Mock University API correctly loads from data/universities/ JSON into UniversityData.")
+
+    def test_followup_state_questions(self):
+        """Verify FollowupItem model."""
+        keywords = [
+            "AI", "Transformer", "distillation", "vector", "quantization", "transformers", "deep learning"
+        ]
+        item = FollowupItem(
+            followup="Could you explain this topic thoroughly?",
+            expected_answer_keywords=keywords,
+        )
+        self.assertEqual(item.followup, "Could you explain this topic thoroughly?")
+        self.assertEqual(item.expected_time_to_ans, 30)
+        self.assertEqual(item.expected_answer_keywords, keywords)
+        self.assertEqual(item.followup_order, 1)
+        print("✅ FollowupItem model verified.")
+
+    def test_topic_state(self):
+        """Verify Topic model."""
+        topic = TopicState(
+            id=1,
+            name="Academic Fit & Course Selection",
+            questions=[],
+        )
+        self.assertEqual(topic.id, 1)
+        self.assertEqual(topic.name, "Academic Fit & Course Selection")
+        print("✅ Topic model verified.")
+
 
     def test_final_evaluation_model(self):
         """Verify FinalEvaluation schema and calculation structures."""

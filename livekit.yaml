@@ -1,0 +1,16 @@
+# LiveKit Server Configuration for Local Development
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+
+# Development API key and secret matching .env.example
+keys:
+  devkey: secret
+
+logging:
+  level: info

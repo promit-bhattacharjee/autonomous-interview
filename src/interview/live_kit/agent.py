@@ -11,6 +11,12 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
+from pathlib import Path
+
+# Ensure src path is always accessible when run directly
+src_path = str(Path(__file__).resolve().parent.parent.parent)
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 from livekit import rtc
 from livekit.agents import (
     AutoSubscribe,
@@ -45,9 +51,10 @@ class InterviewAgent(Agent):
         interview_session: InterviewSession,
         voice_session: AgentSession,
         room: rtc.Room,
+        instructions: str = "You are an autonomous UK university credibility and academic interviewer.",
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(instructions=instructions, **kwargs)
         self.interview_session = interview_session
         self.voice_session = voice_session
         self.room = room
@@ -96,11 +103,31 @@ class InterviewAgent(Agent):
             if next_text:
                 logger.info(f"[Interviewer Response]: {next_text}\n")
                 speech_handle = self.voice_session.say(next_text)
-                await speech_handle
+                if speech_handle is not None and (asyncio.iscoroutine(speech_handle) or hasattr(speech_handle, "__await__")):
+                    await speech_handle
 
             if is_done:
                 self.is_interview_concluded = True
-                logger.info("Interview concluded. Cleanly disconnecting room session...")
+                logger.info("Interview concluded. Generating final evaluation report...")
+                final_eval = self.interview_session.get_final_evaluation()
+                if final_eval:
+                    # Broadcast final scorecard to frontend via WebRTC DataChannel
+                    try:
+                        final_data_channel_payload = {
+                            "type": "final_evaluation",
+                            "final_evaluation": final_eval,
+                        }
+                        await self.room.local_participant.publish_data(
+                            json.dumps(final_data_channel_payload).encode("utf-8")
+                        )
+                    except Exception as dc_err:
+                        logger.debug(f"Failed to emit final eval over data channel: {dc_err}")
+
+                    try:
+                        from main import print_final_evaluation_report
+                        print_final_evaluation_report(final_eval)
+                    except Exception as eval_err:
+                        logger.debug(f"Failed to print final report: {eval_err}")
                 await asyncio.sleep(1.0)
                 try:
                     await self.room.disconnect()
@@ -119,13 +146,26 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Connecting audio communicator to room: {ctx.room.name}")
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
-    # 2. Wait for candidate to connect their microphone
-    logger.info("Waiting for candidate participant to join...")
-    participant = await ctx.wait_for_participant()
-    logger.info(f"Candidate connected: {participant.identity} ({participant.name})")
+    # 2. Wait for candidate to connect their microphone (skip in simulated console mode)
+    is_console = getattr(ctx.job, "fake_job", False)
+    if not is_console:
+        logger.info("Waiting for candidate participant to join...")
+        participant = await ctx.wait_for_participant()
+        logger.info(f"Candidate connected: {participant.identity} ({participant.name})")
+    else:
+        logger.info("Console audio mode active - listening to local microphone and speaker.")
 
     # 3. Initialize the isolated InterviewSession (The Brain)
-    interview_session = InterviewSession(session_id=ctx.room.name)
+    # Check if this room has an existing session created via FastAPI
+    try:
+        from interview.api.session_store import default_session_store
+        session_entry = default_session_store.get_session_by_room(ctx.room.name)
+        if session_entry and session_entry.interview_session:
+            interview_session = session_entry.interview_session
+        else:
+            interview_session = InterviewSession(session_id=ctx.room.name)
+    except Exception:
+        interview_session = InterviewSession(session_id=ctx.room.name)
 
     # 4. Configure Audio Communicator (Ear = Gemini STT, Mouth = Gemini TTS via StreamAdapter)
     gemini_tts = GeminiTTS(

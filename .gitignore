@@ -4,6 +4,15 @@
 *.env
 !.env.example
 
+# SQLite Databases & Local Storage (Never commit data to open repo)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+instance/
+data/*.db
+
 # Python bytecode & cache
 __pycache__/
 *.py[cod]
