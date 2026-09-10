@@ -96,3 +96,54 @@ class TestLiveKitWorkerAndDiscardGuard:
         updated_session = test_db.query(InterviewSessionRecord).filter(InterviewSessionRecord.id == session.id).first()
         assert updated_session.status == "discarded"
         assert "Network timeout mid-turn" in updated_session.report_json
+
+    def test_worker_process_candidate_turn_evaluates_and_progresses(self):
+        from src.agent.worker import process_candidate_turn
+        from src.agent.state import InterviewExecutionState
+
+        initial_state: InterviewExecutionState = {
+            "topics": [
+                {
+                    "name": "Motivation",
+                    "questions": [
+                        {
+                            "question_text": "Why this curriculum?",
+                            "expected_answer_keywords": ["curriculum", "modules"],
+                            "expected_time_to_ans": 45,
+                            "followups": [],
+                        }
+                    ],
+                }
+            ],
+            "current_topic_index": 0,
+            "current_question_index": 0,
+            "current_followup_index": 0,
+            "attempt_count": 1,
+            "is_reask_active": False,
+            "is_interview_concluded": False,
+            "current_prompt": "Why this curriculum?",
+            "expected_keywords": ["curriculum", "modules"],
+            "expected_time_to_ans": 45,
+            "latest_transcript": "",
+            "latest_score": 0.0,
+            "turns": [],
+            "overall_score": 0.0,
+            "ukvi_recommendation": "",
+            "final_report_json": "{}",
+        }
+
+        # 1. Candidate answers with high accuracy
+        new_state, packet = process_candidate_turn(
+            initial_state,
+            "I selected this curriculum because of the advanced modules and robotics lab."
+        )
+
+        assert packet["accuracy_score"] == 100.0
+        assert packet["is_passed"] is True
+        assert packet["is_reask"] is False
+        assert "curriculum" in packet["matched_keywords"]
+        assert len(new_state["turns"]) == 1
+        # Since this was the only question in the only topic, interview concludes!
+        assert new_state["is_interview_concluded"] is True
+        assert new_state["overall_score"] == 100.0
+        assert new_state["ukvi_recommendation"] == "Genuine"
