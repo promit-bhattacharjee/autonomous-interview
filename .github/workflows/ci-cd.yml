@@ -34,6 +34,11 @@ jobs:
       - name: Set Up Python 3.12
         run: uv python install 3.12
 
+      - name: Install System Audio Libraries (PortAudio)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libportaudio2 portaudio19-dev
+
       - name: Install Project & Workspace Dependencies
         run: |
           uv sync --all-extras --dev

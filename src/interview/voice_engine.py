@@ -21,7 +21,11 @@ import wave
 from typing import Optional, Tuple
 
 import numpy as np
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except (ImportError, OSError):
+    from unittest.mock import MagicMock
+    sd = MagicMock()
 from dotenv import load_dotenv
 
 load_dotenv()

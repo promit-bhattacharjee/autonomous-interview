@@ -7,6 +7,21 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 # Resolve database URL from environment or default to local SQLite
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./interview.db")
 
+# Ensure SQLite directory exists or fallback if /data is inaccessible on local host
+if DATABASE_URL.startswith("sqlite:////data"):
+    from pathlib import Path
+    try:
+        Path("/data").mkdir(parents=True, exist_ok=True)
+    except Exception:
+        DATABASE_URL = "sqlite:///./interview.db"
+elif DATABASE_URL.startswith("sqlite:///"):
+    from pathlib import Path
+    db_file = DATABASE_URL.replace("sqlite:///", "")
+    try:
+        Path(db_file).parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
 # SQLite needs check_same_thread=False for multithreaded web servers
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 

@@ -23,7 +23,9 @@ from interview.state import QuestionState, TopicState
 
 
 @unittest.skipUnless(
-    bool(os.getenv("GOOGLE_API_KEY")),
+    bool(os.getenv("GOOGLE_API_KEY"))
+    and "your_gemini" not in os.getenv("GOOGLE_API_KEY", "")
+    and os.getenv("GOOGLE_API_KEY") != "placeholder",
     "Requires live GOOGLE_API_KEY in environment (.env is sanitized per zero-key policy)",
 )
 class TestFullInterviewAndFinalEvaluation(unittest.TestCase):
