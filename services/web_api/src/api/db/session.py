@@ -44,5 +44,27 @@ def get_db_session() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    """Creates all database tables defined in models."""
+    """Creates all database tables defined in models and applies non-destructive migrations."""
     Base.metadata.create_all(bind=engine)
+
+    # Safe SQLite column migration for credential_vault if upgraded from previous schema
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check existing columns in credential_vault
+            result = conn.execute(text("PRAGMA table_info(credential_vault)")).fetchall()
+            existing_cols = {row[1] for row in result}
+            if existing_cols:
+                if "category" not in existing_cols:
+                    conn.execute(text("ALTER TABLE credential_vault ADD COLUMN category VARCHAR(50) DEFAULT 'thinking' NOT NULL"))
+                if "model_name" not in existing_cols:
+                    conn.execute(text("ALTER TABLE credential_vault ADD COLUMN model_name VARCHAR(120)"))
+                if "base_url" not in existing_cols:
+                    conn.execute(text("ALTER TABLE credential_vault ADD COLUMN base_url VARCHAR(255)"))
+                if "voice" not in existing_cols:
+                    conn.execute(text("ALTER TABLE credential_vault ADD COLUMN voice VARCHAR(50)"))
+                if "updated_at" not in existing_cols:
+                    conn.execute(text("ALTER TABLE credential_vault ADD COLUMN updated_at DATETIME"))
+                conn.commit()
+    except Exception:
+        pass

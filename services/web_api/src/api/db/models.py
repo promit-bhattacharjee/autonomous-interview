@@ -31,13 +31,23 @@ class DifficultyTier(str, enum.Enum):
     HARD = "Hard"
 
 
+class ModelCategory(str, enum.Enum):
+    THINKING = "thinking"
+    STT = "stt"
+    TTS = "tts"
+
+
 class AIProvider(str, enum.Enum):
     GOOGLE = "google"
     OPENROUTER = "openrouter"
+    OPENAI = "openai"
+    DEEPGRAM = "deepgram"
+    ELEVENLABS = "elevenlabs"
+    CARTESIA = "cartesia"
     OLLAMA = "ollama"
     DEEPSEEK = "deepseek"
     GLM = "glm"
-    GROK = "grok"
+    GROQ = "groq"
 
 
 class User(Base):
@@ -107,11 +117,16 @@ class CredentialVault(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null for system/admin key
-    provider = Column(Enum(AIProvider), nullable=False)
+    category = Column(String(50), default=ModelCategory.THINKING.value, nullable=False)  # thinking, stt, tts
+    provider = Column(String(50), nullable=False)  # openrouter, google, openai, etc.
+    model_name = Column(String(120), nullable=True)
+    base_url = Column(String(255), nullable=True)
+    voice = Column(String(50), nullable=True)
     encrypted_api_key = Column(Text, nullable=False)
     key_preview = Column(String(20), nullable=False)
     is_admin_key = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="credentials")
 
@@ -191,7 +206,7 @@ class InterviewSessionRecord(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     student_id = Column(String(36), ForeignKey("student_profiles.id"), nullable=False)
     bank_id = Column(String(36), ForeignKey("question_banks.id"), nullable=False)
-    room_name = Column(String(100), unique=True, nullable=False, index=True)
+    room_name = Column(String(100), nullable=False, index=True)
     status = Column(String(50), default="created", nullable=False)  # created, in_progress, completed, discarded
     overall_score = Column(Float, nullable=True)
     ukvi_recommendation = Column(String(50), nullable=True)  # Genuine, Inconclusive, Not Genuine

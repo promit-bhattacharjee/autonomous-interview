@@ -50,3 +50,8 @@ class InterviewExecutionState(TypedDict, total=False):
     overall_score: float
     ukvi_recommendation: str  # Genuine, Inconclusive, Not Genuine
     final_report_json: str
+    active_question_id: str
+    active_question_hits: list[str]
+    total_question_keywords: list[str]
+    keyword_ledger: dict[str, list[str]]
+

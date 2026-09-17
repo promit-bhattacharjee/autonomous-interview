@@ -182,3 +182,90 @@ class TestQuestionServiceAndAssignmentGate:
         active_bank = question_service.get_assigned_bank_for_user(test_db, user.id)
         assert active_bank is not None
         assert active_bank["bank_id"] == bank2.id
+
+
+class TestInstitutionalKeyGovernance:
+    def test_student_key_capture_strictly_disabled(self, test_db):
+        from src.api.services import vault_service
+
+        user = User(
+            username="student_lock_test",
+            email="lock@test.com",
+            hashed_password=hash_password("Pass123!"),
+            role=UserRole.STUDENT,
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Candidate attempting to save any key must raise 403 Forbidden
+        with pytest.raises(HTTPException) as exc_info:
+            vault_service.save_model_credential(
+                db=test_db,
+                category="thinking",
+                provider="openrouter",
+                api_key="sk-or-v1-student-attempt-key",
+                user_id=user.id,
+                is_admin=False,
+            )
+        assert exc_info.value.status_code == 403
+        assert "Candidate API key capture is disabled" in exc_info.value.detail
+
+    def test_admin_clean_student_credentials(self, test_db):
+        from src.api.services import vault_service
+
+        user = User(
+            username="student_clean_target",
+            email="target@test.com",
+            hashed_password=hash_password("Pass123!"),
+            role=UserRole.STUDENT,
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        # Insert a legacy student credential directly
+        legacy_key = CredentialVault(
+            user_id=user.id,
+            category="stt",
+            provider="google",
+            encrypted_api_key=encrypt_api_key("AIzaSyLegacyKey"),
+            key_preview="AIza...yKey",
+            is_admin_key=False,
+        )
+        test_db.add(legacy_key)
+        test_db.commit()
+
+        # Admin cleans/purges student credentials
+        deleted = vault_service.clean_student_credentials(test_db, student_id=user.id)
+        assert deleted == 1
+
+        remaining = test_db.query(CredentialVault).filter(CredentialVault.user_id == user.id).first()
+        assert remaining is None
+
+    def test_student_matrix_locks_and_protects_admin_secret(self, test_db):
+        from src.api.services import vault_service
+
+        # Admin saves thinking key
+        vault_service.save_model_credential(
+            db=test_db,
+            category="thinking",
+            provider="openrouter",
+            api_key="sk-or-v1-super-secret-institution-token",
+            model_name="deepseek/deepseek-v4-flash-0731",
+            is_admin=True,
+        )
+
+        user = User(
+            username="student_secret_test",
+            email="secret@test.com",
+            hashed_password=hash_password("Pass123!"),
+            role=UserRole.STUDENT,
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        matrix = vault_service.get_student_model_matrix(test_db, user.id)
+        assert matrix["thinking"]["admin_locked"] is True
+        # Admin secret is masked and never revealed to student
+        assert "super-secret" not in matrix["thinking"]["active_preview"]
+        assert matrix["thinking"]["active_preview"] == "Institution Enforced (Protected)"
+

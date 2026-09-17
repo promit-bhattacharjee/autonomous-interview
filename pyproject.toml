@@ -5,6 +5,7 @@ description = "UKVI Credibility Voice Interview System - Multi-Service Workspace
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.20.0",
     "cryptography>=42.0.0",
     "dotenv>=0.9.9",
     "fastapi>=0.115.0",
@@ -35,3 +36,8 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests", "services/web_api/tests", "services/langgraph_agent/tests"]
 pythonpath = [".", "src", "services/web_api", "services/langgraph_agent"]
+
+[dependency-groups]
+dev = [
+    "edge-tts>=7.2.8",
+]

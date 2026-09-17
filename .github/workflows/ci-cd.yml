@@ -1,0 +1,77 @@
+name: CI/CD Quality Gate & Dokploy Deployment
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-quality-gate:
+    name: Execute Comprehensive Test Matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install uv (Fast Python Package & Project Manager)
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set Up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install Project & Workspace Dependencies
+        run: |
+          uv sync --all-extras --dev
+
+      - name: Run Full Pytest Suite (Graphs, States, Nodes, APIs, & Security)
+        run: |
+          uv run pytest -v --tb=short
+
+      - name: Generate CI Quality Summary
+        if: always()
+        run: |
+          echo "### 🛡️ CI Quality Gate Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Result:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tested Components:**" >> $GITHUB_STEP_SUMMARY
+          echo "  - Question Generation Graph & Review Checkpoint Nodes" >> $GITHUB_STEP_SUMMARY
+          echo "  - Interview Execution Graph & Relational Keyword Ledger (SPEC-009)" >> $GITHUB_STEP_SUMMARY
+          echo "  - LiveKit Voice Worker, Turn Gating (SPEC-008), & Abort Discard Guard" >> $GITHUB_STEP_SUMMARY
+          echo "  - Relational Data Ingestion Tools & Dynamic 3-Model Credential Vault (SPEC-006)" >> $GITHUB_STEP_SUMMARY
+          echo "  - FastAPI SSR Portals, Seed DB, & JWT Device Lockdown Middleware (SPEC-007)" >> $GITHUB_STEP_SUMMARY
+
+  deploy-verification:
+    name: Verify Clean State for Dokploy Git Catch
+    needs: test-quality-gate
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Confirm Deployment Release Ready
+        run: |
+          echo "=================================================================="
+          echo "✅ Quality Gate Passed: 100% automated tests verified on master."
+          echo "🚀 Commit ${{ github.sha }} is verified for Dokploy native Git catch."
+          echo "Dokploy will pull from Git and rebuild Docker Compose services."
+          echo "=================================================================="

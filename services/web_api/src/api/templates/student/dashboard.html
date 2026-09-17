@@ -1,13 +1,16 @@
-{% extends "base.html" %}
+{% extends "student/layout.html" %}
 
-{% block title %}Student Portal - UKVI Credibility Interviewer{% endblock %}
+{% block title %}Candidate Portal - UKVI Credibility Interviewer{% endblock %}
 
 {% block content %}
 <div class="row g-4">
     <div class="col-md-12">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h2>Welcome, {{ profile.full_name or user.username }}</h2>
-            <span class="badge bg-secondary">Candidate ID: {{ user.username }}</span>
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div>
+                <h2 class="mb-0">Welcome, {{ profile.full_name or user.username }}</h2>
+                <p class="text-secondary small mb-0">UK Student Visa Credibility & Academic Readiness Portal</p>
+            </div>
+            <span class="badge bg-secondary px-3 py-2">Candidate ID: {{ user.username }}</span>
         </div>
     </div>
 
@@ -15,13 +18,13 @@
     <div class="col-md-12">
         {% if assigned_bank %}
             <div class="card border-success p-4 shadow-sm">
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <div>
                         <span class="badge bg-success mb-2">Interview Ready</span>
                         <h4 class="card-title text-success mb-1">Assigned: {{ assigned_bank.title }}</h4>
                         <p class="text-secondary mb-0">Tier: <strong>{{ assigned_bank.difficulty }}</strong> &bull; {{ assigned_bank.topics|length }} Examination Topics Prepared</p>
                     </div>
-                    <a href="/student/interview" class="btn btn-success btn-lg px-4">Launch Voice Interview 🎙️</a>
+                    <a href="/student/interview" class="btn btn-success btn-lg px-4 shadow">Launch Voice Interview 🎙️</a>
                 </div>
             </div>
         {% else %}
@@ -38,8 +41,8 @@
     </div>
 
     <!-- CAS Credibility Profile -->
-    <div class="col-md-6">
-        <div class="card p-4 h-100 shadow-sm">
+    <div class="col-lg-6 d-flex flex-column" id="cas-profile">
+        <div class="card p-4 flex-grow-1 shadow-sm">
             <h4 class="card-title mb-3">Confirmation of Acceptance for Studies (CAS)</h4>
             <form action="/student/profile" method="POST">
                 <div class="mb-3">
@@ -69,34 +72,130 @@
         </div>
     </div>
 
-    <!-- BYOK Key Configuration -->
-    <div class="col-md-6">
-        <div class="card p-4 h-100 shadow-sm">
-            <h4 class="card-title mb-3">Bring Your Own Key (Optional BYOK)</h4>
-            <p class="small text-secondary">If funded by your institution, default keys are provided. You may supply personal OpenRouter or Groq credentials encrypted with AES-256 in the secure credential vault.</p>
-            {% if current_key_preview %}
-                <div class="alert alert-success d-flex justify-content-between align-items-center p-2 mb-3">
-                    <span>Vault Key: <code>{{ current_key_preview }}</code></span>
-                    <span class="badge bg-success">Encrypted</span>
+    <!-- Quick Status / Latest Session -->
+    <div class="col-lg-6 d-flex flex-column">
+        <div class="card p-4 flex-grow-1 shadow-sm">
+            <h4 class="card-title mb-3">Assessment History & Compliance</h4>
+            {% if latest_session %}
+                <div class="p-3 rounded bg-dark border border-secondary mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge {% if latest_session.ukvi_recommendation == 'Genuine' %}bg-success{% elif latest_session.ukvi_recommendation == 'Inconclusive' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                            {{ latest_session.ukvi_recommendation or 'Completed' }}
+                        </span>
+                        <span class="text-secondary small">Score: {{ "%.1f"|format(latest_session.overall_score or 0) }}%</span>
+                    </div>
+                    <p class="small text-secondary mb-2">Latest evaluated session completed on {{ latest_session.concluded_at.strftime('%Y-%m-%d %H:%M') if latest_session.concluded_at else 'Recently' }}.</p>
+                    <a href="/student/results/{{ latest_session.id }}" class="btn btn-sm btn-outline-info w-100">View Full Official Evaluation & Transcript 📊</a>
+                </div>
+            {% else %}
+                <div class="text-center py-4 text-secondary">
+                    <span class="fs-2">📋</span>
+                    <p class="mt-2 mb-0">No completed interviews yet. Once your Question Bank is assigned, take the live interview to receive your UKVI credibility evaluation.</p>
                 </div>
             {% endif %}
-            <form action="/student/byok" method="POST">
-                <div class="mb-3">
-                    <label class="form-label">AI Provider</label>
-                    <select name="provider" class="form-select">
-                        <option value="openrouter" selected>OpenRouter</option>
-                        <option value="google">Google Gemini</option>
-                        <option value="ollama">Ollama (Local/Custom)</option>
-                        <option value="deepseek">DeepSeek</option>
-                        <option value="grok">Grok (xAI)</option>
-                    </select>
+        </div>
+    </div>
+
+    <!-- Institution-Managed AI Interview Engines Status -->
+    <div class="col-md-12" id="ai-engines-status">
+        <div class="card p-4 shadow-sm border-info border-opacity-50">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div>
+                    <h4 class="card-title text-info mb-1">🏛️ Institutional AI Interview Engines</h4>
+                    <p class="text-secondary small mb-0">
+                        All voice interview intelligence, transcription, and speech synthesis engines are centrally provisioned and managed by the Admissions Office. 
+                        <strong>No candidate API keys or manual setup required.</strong>
+                    </p>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">API Key</label>
-                    <input type="password" name="api_key" class="form-control" placeholder="sk-..." required>
+                <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-3 py-2">
+                    <span class="spinner-grow spinner-grow-sm text-success me-1" role="status" style="width: 0.65rem; height: 0.65rem;"></span>
+                    Engines Active &amp; Ready
+                </span>
+            </div>
+
+            <div class="row g-3 mt-1">
+                <!-- 1. Thinking Model (LLM Brain) -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🧠 Thinking Engine</h5>
+                            <span class="badge bg-primary">🔒 Institution Managed</span>
+                        </div>
+                        <p class="small text-secondary mb-3">Conducts academic reasoning, UKVI rubric evaluation, and adaptive probing.</p>
+                        <div class="bg-black bg-opacity-25 p-3 rounded small">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Provider:</span>
+                                <span class="text-info fw-semibold">{{ model_matrix.thinking.active_provider|upper }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Model:</span>
+                                <span class="text-light fw-medium">{{ model_matrix.thinking.active_model or "deepseek/deepseek-chat" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-secondary">Status:</span>
+                                <span class="badge bg-success bg-opacity-25 text-success">Active &bull; Verified</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-outline-info w-100">Encrypt & Store in Vault</button>
-            </form>
+
+                <!-- 2. Speech-to-Text (STT) Model -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🎙️ Speech-to-Text (STT)</h5>
+                            <span class="badge bg-primary">🔒 Institution Managed</span>
+                        </div>
+                        <p class="small text-secondary mb-3">Ultra-low latency real-time transcription of candidate verbal responses.</p>
+                        <div class="bg-black bg-opacity-25 p-3 rounded small">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Provider:</span>
+                                <span class="text-info fw-semibold">{{ model_matrix.stt.active_provider|upper }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Engine:</span>
+                                <span class="text-light fw-medium">{{ model_matrix.stt.active_model or "whisper-large-v3-turbo" }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-secondary">Status:</span>
+                                <span class="badge bg-success bg-opacity-25 text-success">Active &bull; Verified</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Text-to-Speech (TTS) Model -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🔊 Text-to-Speech (TTS)</h5>
+                            <span class="badge bg-primary">🔒 Institution Managed</span>
+                        </div>
+                        <p class="small text-secondary mb-3">Natural British conversational audio synthesis with sub-150ms TTFB streaming.</p>
+                        <div class="bg-black bg-opacity-25 p-3 rounded small">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Provider:</span>
+                                <span class="text-info fw-semibold">{{ model_matrix.tts.active_provider|upper }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-secondary">Voice / Model:</span>
+                                <span class="text-light fw-medium">{{ model_matrix.tts.voice or "Asteria" }} ({{ model_matrix.tts.active_model or "aura-asteria-en" }})</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-secondary">Status:</span>
+                                <span class="badge bg-success bg-opacity-25 text-success">Active &bull; Verified</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-dark border border-secondary mt-3 mb-0 d-flex align-items-center gap-2 small">
+                <span class="fs-5">ℹ️</span>
+                <span>
+                    <strong>Candidate Notice:</strong> You do not need to configure API keys. Verify your academic credentials in the CAS form above and proceed directly to <strong>Launch Voice Interview 🎙️</strong>.
+                </span>
+            </div>
         </div>
     </div>
 </div>

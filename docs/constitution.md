@@ -91,31 +91,37 @@ The system MUST NOT bundle question generation and live interview execution into
 - Because this is an open repository, SQLite database files (`*.db`, `*.sqlite`, `*.sqlite3`), session stores, and environment secrets must NEVER be tracked or committed to GitHub.
 - Strict `.gitignore` rules and automated repository integrity checks prevent partial or direct data leakage.
 
+### 14. Continuous Integration Quality Gate & Native Git Dokploy Deployment
+- All commits, features, and pull requests MUST pass an automated GitHub Actions Continuous Integration (CI) test matrix.
+- **Zero-Defect Release Policy:** Every function, state graph, node execution, relational model, and credential vault operation must pass automated pytest execution with 100% success before code reaches production.
+- **Native Git Deployment:** Dokploy automatically monitors the repository directly via Git. The CI workflow serves as the inviolable gate: broken builds or failing tests are rejected at the pull request and commit level, guaranteeing that Dokploy only pulls and deploys verified, passing software.
+
 ---
 
 ## Article II: Role & Feature Specification Matrix
 
 | Role | Code | Feature Name | Governing Spec | Implementation Status |
 |---|---|---|---|---|
-| **Admin** | `ADM-01` | Upload & Manage UK Universities in SQLite | `SPEC-003` | Proposed / In-Review |
-| **Admin** | `ADM-02` | Configure Model Providers & Encrypted Keys (OpenRouter, Groq, Ollama) | `SPEC-002` | Proposed / In-Review |
-| **Admin** | `ADM-03` | Dedicated `question_generation_graph` Execution & Segmentation | `SPEC-003` | Proposed / In-Review |
-| **Admin** | `ADM-04` | Review Checkpoint & Tree-View Editor (Confirm, Edit Questions/Follow-ups) | `SPEC-003` | Proposed / In-Review |
-| **Admin** | `ADM-05` | Candidate Assignment Matrix (Assign 1 Bank per User, Global / Exclusion) | `SPEC-003` | Proposed / In-Review |
-| **Admin** | `ADM-06` | Audit Candidate Evaluation Scorecards & UKVI Recommendations | `SPEC-003` | Proposed / In-Review |
-| **Student** | `STU-01` | Account Registration & Authentication (SSR Session Auth) | `SPEC-004` | Proposed / In-Review |
-| **Student** | `STU-02` | CAS Profile Submission (Academic, Financial, Sponsor Data) | `SPEC-004` | Proposed / In-Review |
-| **Student** | `STU-03` | Target University Selection (from Admin-Approved Institutions) | `SPEC-004` | Proposed / In-Review |
-| **Student** | `STU-04` | Optional BYOK API Key Configuration (Encrypted Vault) | `SPEC-002` / `SPEC-004` | Proposed / In-Review |
-| **Student** | `STU-05` | Pre-Interview Assignment Check (Requires Confirmed Question Bank) | `SPEC-004` / `SPEC-005` | Proposed / In-Review |
-| **Student** | `STU-06` | Real-Time Voice Interview via `interview_execution_graph` (LiveKit WebRTC) | `SPEC-005` | Prototype Ready |
-| **Student** | `STU-07` | View Official Credibility Report & Topic Breakdown | `SPEC-004` / `SPEC-005` | Proposed / In-Review |
-| **System** | `SYS-01` | SQLAlchemy Relational Persistence (SQLite $\to$ MySQL Ready) | `SPEC-002` | Proposed / In-Review |
-| **System** | `SYS-02` | Fernet/AES-256 Symmetric Credential Encryption Vault | `SPEC-002` | Proposed / In-Review |
-| **System** | `SYS-03` | Tool-Based Relational Fetching Endpoints (Topics, Questions, Followups) | `SPEC-002` / `SPEC-003` | Proposed / In-Review |
-| **System** | `SYS-04` | Mid-Interview Disconnect & Token Runout Discard Guard | `SPEC-005` | Proposed / In-Review |
-| **System** | `SYS-05` | Local Bootstrap SSR Presentation Engine | `SPEC-003` / `SPEC-004` | Proposed / In-Review |
-| **System** | `SYS-06` | JWT Authentication & Single-Device Lockdown (`device_id` Invariant) | `SPEC-002` / `SPEC-004` | Proposed / In-Review |
+| **Admin** | `ADM-01` | Upload & Manage UK Universities in SQLite | `SPEC-003` | Implemented |
+| **Admin** | `ADM-02` | Configure Model Providers & Encrypted Keys (OpenRouter, Groq, Ollama) | `SPEC-002` / `SPEC-006` | Implemented |
+| **Admin** | `ADM-03` | Dedicated `question_generation_graph` Execution & Segmentation | `SPEC-003` | Implemented |
+| **Admin** | `ADM-04` | Review Checkpoint & Tree-View Editor (Confirm, Edit Questions/Follow-ups) | `SPEC-003` | Implemented |
+| **Admin** | `ADM-05` | Candidate Assignment Matrix (Assign 1 Bank per User, Global / Exclusion) | `SPEC-003` | Implemented |
+| **Admin** | `ADM-06` | Audit Candidate Evaluation Scorecards & UKVI Recommendations | `SPEC-003` | Implemented |
+| **Student** | `STU-01` | Account Registration & Authentication (SSR Session Auth) | `SPEC-004` / `SPEC-007` | Implemented |
+| **Student** | `STU-02` | CAS Profile Submission (Academic, Financial, Sponsor Data) | `SPEC-004` | Implemented |
+| **Student** | `STU-03` | Target University Selection (from Admin-Approved Institutions) | `SPEC-004` | Implemented |
+| **Student** | `STU-04` | Optional BYOK API Key Configuration (Encrypted Vault) | `SPEC-002` / `SPEC-006` | Implemented |
+| **Student** | `STU-05` | Pre-Interview Assignment Check (Requires Confirmed Question Bank) | `SPEC-004` / `SPEC-005` | Implemented |
+| **Student** | `STU-06` | Real-Time Voice Interview via `interview_execution_graph` (LiveKit WebRTC) | `SPEC-005` / `SPEC-008` / `SPEC-009` | Implemented |
+| **Student** | `STU-07` | View Official Credibility Report & Topic Breakdown | `SPEC-004` / `SPEC-005` | Implemented |
+| **System** | `SYS-01` | SQLAlchemy Relational Persistence (SQLite $\to$ MySQL Ready) | `SPEC-002` | Implemented |
+| **System** | `SYS-02` | Fernet/AES-256 Symmetric Credential Encryption Vault | `SPEC-002` / `SPEC-006` | Implemented |
+| **System** | `SYS-03` | Tool-Based Relational Fetching Endpoints (Topics, Questions, Followups) | `SPEC-002` / `SPEC-003` | Implemented |
+| **System** | `SYS-04` | Mid-Interview Disconnect & Token Runout Discard Guard | `SPEC-005` | Implemented |
+| **System** | `SYS-05` | Local Bootstrap SSR Presentation Engine | `SPEC-003` / `SPEC-004` | Implemented |
+| **System** | `SYS-06` | JWT Authentication & Single-Device Lockdown (`device_id` Invariant) | `SPEC-002` / `SPEC-007` | Implemented |
+| **System** | `SYS-07` | CI/CD Quality Gate & Automated VPS Dokploy Deployment | `SPEC-010` | Implemented |
 
 ---
 
@@ -127,4 +133,5 @@ To maintain software reliability and prevent architectural drift:
 3. **Two-Graph Separation:** Question generation features belong exclusively to `SPEC-003` (`question_generation_graph`); interview turn features belong exclusively to `SPEC-005` (`interview_execution_graph`).
 4. **Tool-Based Verification:** Tools fetching topics, questions, and follow-ups are verified with unit tests before graph integration.
 5. **Security Enforcement:** All session ingress points enforce JWT token authenticity and single `device_id` integrity.
-6. **Integration Pipeline:** Automated end-to-end testing verifies the contract before release.
+6. **Integration Pipeline & Quality Gate:** Automated end-to-end testing via GitHub Actions verifies 100% of graph nodes, states, and routes before deployment to Dokploy.
+

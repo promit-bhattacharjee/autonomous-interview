@@ -163,18 +163,27 @@ class StudentProfile(Base):
     selected_university = relationship("University", back_populates="students")
 
 
+class ModelCategory(str, enum.Enum):
+    THINKING = "thinking"
+    STT = "stt"
+    TTS = "tts"
+
+
 class CredentialVault(Base):
     __tablename__ = "credential_vault"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)
-    provider = Column(String(50), nullable=False, default="openrouter")  # openrouter, groq, ollama, openai
-    base_url = Column(String(255), nullable=True)
-    thinking_model = Column(String(100), default="deepseek/deepseek-v4-flash-0731", nullable=False)
-    tts_model = Column(String(100), default="gemini-2.5-flash-preview-tts", nullable=False)
-    stt_model = Column(String(100), default="gemini-3.6-flash", nullable=False)
-    encrypted_api_key = Column(Text, nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True, index=True)  # Null for admin/system defaults
+    category = Column(String(50), default="thinking", nullable=False)  # thinking, stt, tts
+    provider = Column(String(50), nullable=False)  # openrouter, google, openai, deepgram, elevenlabs, cartesia, groq, ollama
+    model_name = Column(String(120), nullable=True)  # model identifier or empty
+    base_url = Column(String(255), nullable=True)  # optional custom base URL
+    voice = Column(String(50), nullable=True)  # optional voice name / ID for TTS
+    encrypted_api_key = Column(Text, nullable=False)  # AES-256 Fernet encrypted key
+    key_preview = Column(String(20), nullable=False)  # safe preview, e.g. sk-...94f2
+    is_admin_key = Column(Boolean, default=False, nullable=False)  # True if configured by Admin as institution default
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="credentials")
 ```
@@ -219,7 +228,29 @@ def mask_api_key(raw_key: str) -> str:
     return f"{raw_key[:3]}...{raw_key[-4:]}"
 ```
 
-### 4.2. JWT Token Service & Single-Device Lockdown (`src/interview/security/auth.py`)
+### 4.2. Dynamic 3-Tier Model & Credential Resolution Hierarchy (`src/api/services/vault_service.py`)
+
+To deliver an open-source, flexible multi-model architecture without hardcoded `.env` lock-in, the system decomposes AI dependencies into three distinct functional categories:
+1. **Thinking Model (LLM Brain):** Reasoner evaluating student responses, managing rubrics, and generating conversational questions.
+2. **Speech-to-Text (STT) Model:** Real-time audio stream transcriber converting candidate speech to text.
+3. **Text-to-Speech (TTS) Model:** Real-time voice synthesizer producing natural interviewer speech audio.
+
+For any interview session, model credentials and engine configurations are dynamically resolved using a strict 3-tier hierarchy:
+
+$$\text{Candidate Session} \longrightarrow \begin{cases} 
+\textbf{Tier 1: Student BYOK Key} & \text{Priority 1} \implies \text{Open-Source Zero Platform Fee (Free Mode)} \\ 
+\textbf{Tier 2: Admin Institution Key} & \text{Priority 2} \implies \text{Institutional Default (Prototype Chargeable Tier)} \\ 
+\textbf{Tier 3: System Environment Key} & \text{Priority 3} \implies \text{Fallback to static } .env \text{ definitions} 
+\end{cases}$$
+
+- **`resolve_model_config(db, category, student_user_id)`**:
+  - Resolves target user by UUID or username.
+  - Queries `CredentialVault` for Student BYOK key matching the category. If found, decrypts key and marks `is_free = True`.
+  - Otherwise, queries `CredentialVault` for Admin key (`is_admin_key = True`). If found, decrypts key and marks `is_free = False`.
+  - Otherwise, falls back to `.env` variables (`OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `OPENAI_API_KEY`).
+- **Data Endpoint:** `GET /api/students/{user_id}/model-config` provides the resolved models directly to LiveKit Agent workers and WebRTC clients.
+
+### 4.3. JWT Token Service & Single-Device Lockdown (`src/interview/security/auth.py`)
 - **Lightweight Stateless Tokens:** Cryptographically signed with HMAC-SHA256 (`HS256`) using `JWT_SECRET_KEY`.
 - **Claims Payload:** Contains `sub` (User UUID), `username`, `role` (`admin`/`student`), `device_id`, and `exp` (12-hour session expiry).
 - **Single-Device Enforcement:** On login, the client provides or is issued a unique `device_id`. The server records this `device_id` in `User.active_device_id`.

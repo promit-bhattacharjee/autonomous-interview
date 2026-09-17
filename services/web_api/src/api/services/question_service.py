@@ -322,7 +322,7 @@ def record_completed_session(
                 spoken_prompt=t.get("spoken_prompt", ""),
                 candidate_transcript=t.get("candidate_transcript", ""),
                 score=float(t.get("score", 0.0)),
-                rubric_hits_json=json.dumps(t.get("matched_keywords", [])),
+                rubric_hits_json=json.dumps(t.get("rubric_hits") if t.get("rubric_hits") is not None else t.get("matched_keywords", [])),
                 missed_keywords_json=json.dumps(t.get("missed_keywords", [])),
                 latency_ms=int(t.get("latency_ms", 0)),
             )

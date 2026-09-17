@@ -1,16 +1,27 @@
 import json
 from typing import Any
 from langgraph.graph import END, StateGraph
+from src.agent.keyword_ledger import RelationalKeywordLedger
 from src.agent.prompts.rubrics import compute_ukvi_recommendation, evaluate_response_keywords
 from src.agent.state import InterviewExecutionState, TurnRecord
 
 
 def evaluate_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
-    """Scores candidate transcript against expected keywords for current turn."""
+    """Scores candidate transcript against expected keywords using deduplicated relational ledger."""
     transcript = state.get("latest_transcript", "").strip()
-    expected_kws = state.get("expected_keywords", [])
+    total_kws = state.get("total_question_keywords") or state.get("expected_keywords", [])
+    active_q_id = state.get("active_question_id") or f"q-{state.get('current_topic_index', 0)}-{state.get('current_question_index', 0)}"
 
-    score, hits, missed = evaluate_response_keywords(transcript, expected_kws)
+    text_lower = transcript.lower()
+    new_hits = [kw for kw in total_kws if kw.lower() in text_lower]
+
+    # Relational Deduplicated Keyword Ledger:
+    # When a keyword matches, it is appended to the question's ledger.
+    # Duplicates are automatically eliminated (e.g. A, then B, then A results in [A, B]).
+    ledger = RelationalKeywordLedger(state.get("keyword_ledger", {}))
+    cumulative_hits = ledger.append_matches(active_q_id, new_hits)
+    missed = ledger.get_missing(active_q_id, total_kws)
+    score = ledger.calculate_score(active_q_id, total_kws)
 
     turn: TurnRecord = {
         "turn_type": "reask" if state.get("is_reask_active") else "question",
@@ -18,7 +29,7 @@ def evaluate_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
         "spoken_prompt": state.get("current_prompt", ""),
         "candidate_transcript": transcript,
         "score": score,
-        "rubric_hits": hits,
+        "rubric_hits": cumulative_hits,
         "missed_keywords": missed,
     }
 
@@ -28,6 +39,10 @@ def evaluate_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
     return {
         "latest_score": score,
         "turns": updated_turns,
+        "active_question_hits": cumulative_hits,
+        "total_question_keywords": total_kws,
+        "active_question_id": active_q_id,
+        "keyword_ledger": ledger.to_dict(),
     }
 
 
@@ -48,7 +63,7 @@ def process_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
             "is_reask_active": True,
         }
 
-    # Otherwise, advance turn sequence
+    # Otherwise, advance turn sequence and reset active question ledger
     topics = state.get("topics", [])
     t_idx = state.get("current_topic_index", 0)
     q_idx = state.get("current_question_index", 0)
@@ -65,6 +80,8 @@ def process_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
             "current_followup_index": f_idx + 1,
             "attempt_count": 1,
             "is_reask_active": False,
+            "active_question_hits": [],
+            "total_question_keywords": [],
         }
 
     # Otherwise advance to next question in this topic
@@ -74,6 +91,8 @@ def process_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
             "current_followup_index": 0,
             "attempt_count": 1,
             "is_reask_active": False,
+            "active_question_hits": [],
+            "total_question_keywords": [],
         }
 
     # Otherwise advance to next topic
@@ -84,12 +103,16 @@ def process_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
             "current_followup_index": 0,
             "attempt_count": 1,
             "is_reask_active": False,
+            "active_question_hits": [],
+            "total_question_keywords": [],
         }
 
     # All topics and questions exhausted -> Conclude interview
     return {
         "is_interview_concluded": True,
         "is_reask_active": False,
+        "active_question_hits": [],
+        "total_question_keywords": [],
     }
 
 
@@ -102,14 +125,17 @@ def ask_question_node(state: InterviewExecutionState) -> dict[str, Any]:
             "expected_time_to_ans": 0,
         }
 
-    # Handle Re-ask
+    # Handle Re-ask targeting remaining uneliminated keywords
     if state.get("is_reask_active"):
-        last_turn = state.get("turns", [])[-1] if state.get("turns") else None
-        missed = last_turn.get("missed_keywords", []) if last_turn else []
-        missed_str = ", ".join(missed[:2]) if missed else "specific details"
+        total_kws = state.get("total_question_keywords", [])
+        active_q_id = state.get("active_question_id") or f"q-{state.get('current_topic_index', 0)}-{state.get('current_question_index', 0)}"
+        ledger = RelationalKeywordLedger(state.get("keyword_ledger", {}))
+        missing = ledger.get_missing(active_q_id, total_kws)
+        missed_str = ", ".join(missing[:2]) if missing else "specific details"
         return {
             "current_prompt": f"Could you elaborate further regarding {missed_str}?",
             "expected_time_to_ans": 30,
+            "expected_keywords": missing or total_kws,
         }
 
     topics = state.get("topics", [])
@@ -125,17 +151,27 @@ def ask_question_node(state: InterviewExecutionState) -> dict[str, Any]:
     if f_idx > 0:
         followups = curr_q.get("followups", [])
         active_f = followups[f_idx - 1] if f_idx - 1 < len(followups) else {}
+        kws = active_f.get("expected_answer_keywords", [])
+        prompt_id = f"{curr_q.get('question_id', f'q-{q_idx}')}-f{f_idx}"
         return {
             "current_prompt": active_f.get("followup_text", ""),
             "expected_time_to_ans": active_f.get("expected_time_to_ans", 30),
-            "expected_keywords": active_f.get("expected_answer_keywords", []),
+            "expected_keywords": kws,
+            "total_question_keywords": kws,
+            "active_question_hits": [],
+            "active_question_id": prompt_id,
         }
 
     # Otherwise primary question
+    kws = curr_q.get("expected_answer_keywords", [])
+    prompt_id = f"{curr_q.get('question_id', f'q-{q_idx}')}-main"
     return {
         "current_prompt": curr_q.get("question_text", ""),
         "expected_time_to_ans": curr_q.get("expected_time_to_ans", 45),
-        "expected_keywords": curr_q.get("expected_answer_keywords", []),
+        "expected_keywords": kws,
+        "total_question_keywords": kws,
+        "active_question_hits": [],
+        "active_question_id": prompt_id,
     }
 
 

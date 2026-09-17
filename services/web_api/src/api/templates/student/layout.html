@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}UKVI Candidate Interview Portal{% endblock %}</title>
+    <!-- Local Vendored Bootstrap -->
+    <link rel="stylesheet" href="/static/vendor/bootstrap/css/bootstrap.min.css">
+    <style>
+        :root {
+            --stu-bg: #0b1329;
+            --stu-surface: #131d38;
+            --stu-card: #1c284a;
+            --stu-primary: #0284c7;
+            --stu-primary-hover: #0369a1;
+            --stu-accent: #10b981;
+            --stu-border: rgba(255, 255, 255, 0.09);
+        }
+        body {
+            background-color: var(--stu-bg);
+            color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .stu-navbar {
+            background: linear-gradient(180deg, #131d38 0%, rgba(19, 29, 56, 0.95) 100%);
+            border-bottom: 1px solid var(--stu-border);
+            backdrop-filter: blur(12px);
+        }
+        .stu-brand {
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #38bdf8 !important;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .stu-card {
+            background-color: var(--stu-surface);
+            border: 1px solid var(--stu-border);
+            border-radius: 0.75rem;
+        }
+        .nav-link {
+            color: #94a3b8 !important;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.85rem !important;
+        }
+        .nav-link:hover, .nav-link.active {
+            color: #ffffff !important;
+            background: rgba(2, 132, 199, 0.18);
+        }
+        .badge-student {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            font-weight: 600;
+        }
+
+        /* Mobile Bottom Navigation Bar */
+        .mobile-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1040;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.4rem 0.5rem 0.6rem 0.5rem;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.45);
+        }
+        .mobile-bottom-nav .nav-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .mobile-bottom-nav .nav-col {
+            flex: 1;
+            text-align: center;
+        }
+        .mobile-bottom-nav .nav-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #94a3b8;
+            font-size: 0.72rem;
+            font-weight: 500;
+            transition: color 0.15s ease;
+            padding: 0.25rem 0;
+        }
+        .mobile-bottom-nav .nav-btn .icon {
+            font-size: 1.25rem;
+            line-height: 1.2;
+            margin-bottom: 2px;
+        }
+        .mobile-bottom-nav .nav-btn:hover,
+        .mobile-bottom-nav .nav-btn.active {
+            color: #38bdf8;
+        }
+        /* Highlighted Center Action: Interview */
+        .mobile-bottom-nav .nav-btn.interview-highlight {
+            color: #10b981;
+            position: relative;
+        }
+        .mobile-bottom-nav .nav-btn.interview-highlight .icon-wrap {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            margin-top: -16px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45);
+            border: 2px solid #131d38;
+        }
+
+        /* Prevent mobile content from being obscured by bottom bar */
+        @media (max-width: 767.98px) {
+            main.student-content {
+                padding-bottom: 5.5rem !important;
+            }
+            footer.student-footer {
+                display: none;
+            }
+        }
+
+        footer {
+            margin-top: auto;
+            border-top: 1px solid var(--stu-border);
+            padding: 1.25rem 0;
+            background: #090e1f;
+            color: #64748b;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navbar for Desktop/Tablet -->
+    <nav class="navbar navbar-expand-md stu-navbar px-3 sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand stu-brand" href="/student">
+                <span class="fs-4">🎙️</span>
+                <span>UKVI Candidate Portal</span>
+            </a>
+            <div class="d-flex align-items-center d-md-none gap-2">
+                <span class="badge badge-student px-2 py-1 small">{{ user.username if user else 'Candidate' }}</span>
+                <a href="/auth/logout" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size: 0.75rem;">Exit</a>
+            </div>
+
+            <div class="collapse navbar-collapse" id="studentNavContent">
+                <ul class="navbar-nav me-auto mb-2 mb-md-0 ms-md-3 gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student#cas-profile">CAS Profile</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-success fw-semibold" href="/student/interview">🎙️ Live Interview</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/results">Results & Transcripts</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge badge-student px-3 py-2">
+                        Candidate: {{ user.username if user else 'Candidate' }}
+                    </span>
+                    <a href="/auth/logout" class="btn btn-outline-danger btn-sm px-3">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Error/Notice Alert Banner -->
+    <div class="container mt-3">
+        {% if request.query_params.get('error') %}
+            <div class="alert alert-warning alert-dismissible fade show border-0 shadow-sm" role="alert">
+                <strong>Notice:</strong> {{ request.query_params.get('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endif %}
+        {% if request.query_params.get('success') %}
+            <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert">
+                <strong>Success:</strong> {{ request.query_params.get('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Main Student Content -->
+    <main class="container my-4 student-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Mobile Bottom Navigation (Visible on mobile screens < 768px) -->
+    <nav class="mobile-bottom-nav d-md-none">
+        <ul class="nav-row">
+            <li class="nav-col">
+                <a href="/student" class="nav-btn">
+                    <span class="icon">🏠</span>
+                    <span>Portal</span>
+                </a>
+            </li>
+            <li class="nav-col">
+                <a href="/student/interview" class="nav-btn interview-highlight">
+                    <div class="icon-wrap">🎙️</div>
+                    <span class="fw-bold mt-1">Interview</span>
+                </a>
+            </li>
+            <li class="nav-col">
+                <a href="/student/results" class="nav-btn">
+                    <span class="icon">📊</span>
+                    <span>Results</span>
+                </a>
+            </li>
+            <li class="nav-col">
+                <a href="/student#cas-profile" class="nav-btn">
+                    <span class="icon">👤</span>
+                    <span>CAS</span>
+                </a>
+            </li>
+            <li class="nav-col">
+                <a href="/auth/logout" class="nav-btn text-danger">
+                    <span class="icon">🚪</span>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Desktop Student Footer -->
+    <footer class="student-footer text-center small">
+        <div class="container">
+            UKVI Academic Credibility Voice Engine &bull; Zero Cloud WebRTC &bull; Candidate Self-Service
+        </div>
+    </footer>
+
+    <script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script>
+        if (!localStorage.getItem("ukvi_device_id")) {
+            localStorage.setItem("ukvi_device_id", "dev-" + crypto.randomUUID());
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

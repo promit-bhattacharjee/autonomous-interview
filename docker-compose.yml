@@ -2,7 +2,7 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     container_name: interview_livekit_server
-    command: --config /etc/livekit.yaml
+    command: --config /etc/livekit.yaml --node-ip ${NODE_IP:-127.0.0.1}
     restart: unless-stopped
     ports:
       - "7880:7880"         # HTTP API and WebSocket signaling
@@ -11,7 +11,8 @@ services:
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
-      - "LIVEKIT_KEYS=devkey: secret"
+      - "LIVEKIT_KEYS=${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
+      - "NODE_IP=${NODE_IP:-127.0.0.1}"
     networks:
       - interview_net
 
@@ -24,12 +25,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:////data/interview.db
-      - LIVEKIT_URL=http://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-      - JWT_SECRET=change-this-in-production-ukvi-jwt-secret-key-32-chars
-      - ENCRYPTION_SECRET_KEY=k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/interview.db}
+      - LIVEKIT_URL=${PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
+      - JWT_SECRET=${JWT_SECRET:-change-this-in-production-ukvi-jwt-secret-key-32-chars}
+      - ENCRYPTION_SECRET_KEY=${ENCRYPTION_SECRET_KEY:-k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - sqlite_data:/data
     depends_on:
@@ -45,11 +48,13 @@ services:
     restart: unless-stopped
     environment:
       - LIVEKIT_URL=ws://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-devkey}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-secret}
       - API_SERVICE_URL=http://web_api:8000
-      - DATABASE_URL=sqlite:////data/interview.db
-      - ENCRYPTION_SECRET_KEY=k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/interview.db}
+      - ENCRYPTION_SECRET_KEY=${ENCRYPTION_SECRET_KEY:-k2t_9uO8zE1M-1A9_N_v7a4jK0tqL6xW9eP8bX2cR0E=}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - sqlite_data:/data
     depends_on:

@@ -223,6 +223,13 @@ def resolve_interview_questions(db: Session, university_id: str, student_profile
    - Multi-select candidate list with "Include" and "Exclude" flags.
 5. **Evaluation Audit & Reports (`/admin/evaluations`):**
    - View candidate scorecards, accuracy breakdown, strengths, areas for improvement, and UKVI visa justification report.
+6. **AI Engine & 3-Model Configuration (Institution Defaults):**
+   - Configures the 3 core AI models for candidate sessions without personal BYOK keys:
+     - **Thinking Model (LLM Brain):** Reasoner evaluating responses and generating structured prompts (OpenRouter, Gemini, OpenAI, DeepSeek, Ollama, Grok).
+     - **Speech-to-Text (STT) Model:** Real-time microphone audio transcription (Google Gemini STT, OpenAI Whisper, Deepgram, Groq Whisper).
+     - **Text-to-Speech (TTS) Model:** Professional British interviewer audio synthesizer (Google Gemini TTS, OpenAI TTS, ElevenLabs, Cartesia).
+   - **Commercial Prototype Mechanism:** Candidates without BYOK use these institution-provided keys and can be billed based on model consumption; candidates with BYOK keys bypass fees completely.
+   - Endpoints: `POST /admin/credentials` (saves/upserts encrypted key), `POST /admin/credentials/delete` (reverts to `.env` fallback).
 
 ---
 
@@ -232,6 +239,7 @@ def resolve_interview_questions(db: Session, university_id: str, student_profile
 - **AC-3.2 (Authoritative Admin Modification):** Modifications to question text or rubric keywords saved by an Admin must immediately reflect in subsequent candidate interviews.
 - **AC-3.3 (Candidate Exclusion Enforcement):** Excluded students must not receive or be routed to excluded question banks.
 - **AC-3.4 (Bootstrap SSR Integrity):** All admin views must render completely using local Bootstrap assets (`bootstrap.min.css`, `bootstrap.bundle.min.js`) without external CDN requests.
+- **AC-3.5 (3-Model Admin Provisioning):** The Admin must be able to configure and revert each of the 3 model types (Thinking, STT, TTS) independently, with keys securely encrypted in the CredentialVault.
 
 ---
 

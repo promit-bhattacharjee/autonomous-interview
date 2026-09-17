@@ -1,6 +1,6 @@
-{% extends "base.html" %}
+{% extends "admin/layout.html" %}
 
-{% block title %}Admin Dashboard - UKVI System{% endblock %}
+{% block title %}Admin Dashboard - UKVI Admissions Command Center{% endblock %}
 
 {% block content %}
 <div class="row g-4">
@@ -87,6 +87,171 @@
         </div>
     </div>
 
+    <!-- AI Engine & Model Configuration (Admin / Institution Defaults) -->
+    <div class="col-md-12" id="ai-engines">
+        <div class="card p-4 shadow-sm border-info border-opacity-50">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div>
+                    <h4 class="card-title text-info mb-1">⚙️ AI Engine & Model Configuration</h4>
+                    <p class="text-secondary small mb-0">
+                        Configure institutional API keys for candidate credibility interview sessions. 
+                        <strong>Candidate Key Capture: Disabled.</strong> All candidate voice interviews execute exclusively via these institution-managed engines.
+                    </p>
+                </div>
+                <span class="badge bg-dark border border-info text-info px-3 py-2">Institution Managed</span>
+            </div>
+
+            <div class="row g-3 mt-2">
+                <!-- 1. Thinking Model (LLM Brain) -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🧠 Thinking Model</h5>
+                            {% if model_matrix.thinking.is_configured %}
+                                <span class="badge bg-success">Admin Configured</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Default (.env)</span>
+                            {% endif %}
+                        </div>
+                        <p class="small text-secondary mb-2">Evaluates responses, tracks rubrics, and conducts question reasoning.</p>
+                        <div class="bg-black bg-opacity-25 p-2 rounded mb-3 small">
+                            <div><strong>Active Provider:</strong> <span class="text-info">{{ model_matrix.thinking.provider }}</span></div>
+                            <div><strong>Active Model:</strong> <span class="text-light">{{ model_matrix.thinking.model_name or "Default" }}</span></div>
+                            <div><strong>Key Preview:</strong> <code>{{ model_matrix.thinking.key_preview }}</code></div>
+                        </div>
+
+                        <form action="/admin/credentials" method="POST">
+                            <input type="hidden" name="category" value="thinking">
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Provider</label>
+                                <select name="provider" class="form-select form-select-sm">
+                                    <option value="openrouter" {% if model_matrix.thinking.provider == 'openrouter' %}selected{% endif %}>OpenRouter</option>
+                                    <option value="google" {% if model_matrix.thinking.provider == 'google' %}selected{% endif %}>Google Gemini</option>
+                                    <option value="openai" {% if model_matrix.thinking.provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                                    <option value="deepseek" {% if model_matrix.thinking.provider == 'deepseek' %}selected{% endif %}>DeepSeek</option>
+                                    <option value="ollama" {% if model_matrix.thinking.provider == 'ollama' %}selected{% endif %}>Ollama (Local/Custom)</option>
+                                    <option value="grok" {% if model_matrix.thinking.provider == 'grok' %}selected{% endif %}>Grok (xAI)</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Model Name</label>
+                                <input type="text" name="model_name" class="form-control form-control-sm" placeholder="e.g. deepseek/deepseek-v4-flash-0731" value="{{ model_matrix.thinking.model_name or '' }}">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Base URL (Optional)</label>
+                                <input type="text" name="base_url" class="form-control form-control-sm" placeholder="https://openrouter.ai/api/v1" value="{{ model_matrix.thinking.base_url or '' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary">API Key</label>
+                                <input type="password" name="api_key" class="form-control form-control-sm" placeholder="sk-... / AIza..." required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-info btn-sm w-100">Save Thinking Key</button>
+                        </form>
+                        {% if model_matrix.thinking.is_configured %}
+                            <form action="/admin/credentials/delete" method="POST" class="mt-2">
+                                <input type="hidden" name="category" value="thinking">
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100">Revert to .env Fallback</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 2. Speech-to-Text (STT) Model -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🎙️ Speech-to-Text (STT)</h5>
+                            {% if model_matrix.stt.is_configured %}
+                                <span class="badge bg-success">Admin Configured</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Default (.env)</span>
+                            {% endif %}
+                        </div>
+                        <p class="small text-secondary mb-2">Transcribes candidate voice streams into text in real time.</p>
+                        <div class="bg-black bg-opacity-25 p-2 rounded mb-3 small">
+                            <div><strong>Active Provider:</strong> <span class="text-info">{{ model_matrix.stt.provider }}</span></div>
+                            <div><strong>Active Model:</strong> <span class="text-light">{{ model_matrix.stt.model_name or "gemini-3.6-flash" }}</span></div>
+                            <div><strong>Key Preview:</strong> <code>{{ model_matrix.stt.key_preview }}</code></div>
+                        </div>
+
+                        <form action="/admin/credentials" method="POST">
+                            <input type="hidden" name="category" value="stt">
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Provider</label>
+                                <select name="provider" class="form-select form-select-sm">
+                                    <option value="groq" {% if model_matrix.stt.provider == 'groq' %}selected{% endif %}>Groq Whisper (whisper-large-v3-turbo)</option>
+                                    <option value="deepgram" {% if model_matrix.stt.provider == 'deepgram' %}selected{% endif %}>Deepgram (nova-2)</option>
+                                    <option value="openai" {% if model_matrix.stt.provider == 'openai' %}selected{% endif %}>OpenAI Whisper (whisper-1)</option>
+                                    <option value="google" {% if model_matrix.stt.provider == 'google' %}selected{% endif %}>Google Gemini STT</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary">API Key</label>
+                                <input type="password" name="api_key" class="form-control form-control-sm" placeholder="AIza... / sk-... / gsk_..." required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-info btn-sm w-100">Save STT Key</button>
+                        </form>
+                        {% if model_matrix.stt.is_configured %}
+                            <form action="/admin/credentials/delete" method="POST" class="mt-2">
+                                <input type="hidden" name="category" value="stt">
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100">Revert to .env Fallback</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 3. Text-to-Speech (TTS) Model -->
+                <div class="col-lg-4">
+                    <div class="card bg-dark border-secondary p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="text-light mb-0">🔊 Text-to-Speech (TTS)</h5>
+                            {% if model_matrix.tts.is_configured %}
+                                <span class="badge bg-success">Admin Configured</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Default (.env)</span>
+                            {% endif %}
+                        </div>
+                        <p class="small text-secondary mb-2">Synthesizes British interviewer voice audio dynamically.</p>
+                        <div class="bg-black bg-opacity-25 p-2 rounded mb-3 small">
+                            <div><strong>Active Provider:</strong> <span class="text-info">{{ model_matrix.tts.provider }}</span></div>
+                            <div><strong>Active Voice:</strong> <span class="text-light">{{ model_matrix.tts.voice or 'Aoede' }}</span></div>
+                            <div><strong>Key Preview:</strong> <code>{{ model_matrix.tts.key_preview }}</code></div>
+                        </div>
+
+                        <form action="/admin/credentials" method="POST">
+                            <input type="hidden" name="category" value="tts">
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Provider</label>
+                                <select name="provider" class="form-select form-select-sm">
+                                    <option value="deepgram" {% if model_matrix.tts.provider == 'deepgram' %}selected{% endif %}>Deepgram Aura ($0.015/1k chars)</option>
+                                    <option value="openai" {% if model_matrix.tts.provider == 'openai' %}selected{% endif %}>OpenAI TTS ($0.015/1k chars)</option>
+                                    <option value="google" {% if model_matrix.tts.provider == 'google' %}selected{% endif %}>Google Gemini TTS</option>
+                                    <option value="elevenlabs" {% if model_matrix.tts.provider == 'elevenlabs' %}selected{% endif %}>ElevenLabs</option>
+                                    <option value="cartesia" {% if model_matrix.tts.provider == 'cartesia' %}selected{% endif %}>Cartesia</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small text-secondary">Voice ID / Name</label>
+                                <input type="text" name="voice" class="form-control form-control-sm" placeholder="e.g. Asteria, alloy, or Aoede" value="{{ model_matrix.tts.voice or 'Asteria' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary">API Key</label>
+                                <input type="password" name="api_key" class="form-control form-control-sm" placeholder="AIza... / sk-..." required>
+                            </div>
+                            <button type="submit" class="btn btn-outline-info btn-sm w-100">Save TTS Key</button>
+                        </form>
+                        {% if model_matrix.tts.is_configured %}
+                            <form action="/admin/credentials/delete" method="POST" class="mt-2">
+                                <input type="hidden" name="category" value="tts">
+                                <button type="submit" class="btn btn-outline-danger btn-sm w-100">Revert to .env Fallback</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Candidate Assignment Matrix -->
     <div class="col-md-12">
         <div class="card p-4 shadow-sm">
@@ -118,3 +283,4 @@
     </div>
 </div>
 {% endblock %}
+

@@ -1,15 +1,16 @@
-{% extends "base.html" %}
+{% extends "student/layout.html" %}
 
-{% block title %}Live Voice Interview - UKVI Credibility{% endblock %}
+{% block title %}Live Voice Interview - UKVI Credibility Assessment{% endblock %}
 
 {% block extra_head %}
 <style>
     .audio-visualizer {
         width: 100%;
-        height: 80px;
-        background: rgba(15, 23, 42, 0.6);
+        height: 70px;
+        background: rgba(15, 23, 42, 0.85);
         border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        display: block;
     }
     .mic-pulse {
         animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
@@ -19,11 +20,30 @@
         70% { box-shadow: 0 0 0 15px rgba(13, 110, 253, 0); }
         100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
     }
+    .speaker-wave {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        height: 14px;
+    }
+    .speaker-bar {
+        width: 3px;
+        height: 100%;
+        background-color: #38bdf8;
+        border-radius: 2px;
+        animation: sound-bounce 1s ease-in-out infinite;
+    }
+    .speaker-bar:nth-child(2) { animation-delay: 0.2s; }
+    .speaker-bar:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes sound-bounce {
+        0%, 100% { height: 4px; }
+        50% { height: 14px; }
+    }
     .chip {
         display: inline-block;
-        padding: 0.25rem 0.65rem;
+        padding: 0.2rem 0.55rem;
         border-radius: 50rem;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 500;
     }
     .chip-matched {
@@ -36,75 +56,148 @@
         color: #ea868f;
         border: 1px solid rgba(220, 53, 69, 0.3);
     }
+    .bubble-examiner {
+        background: rgba(14, 116, 144, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        border-radius: 12px 12px 12px 2px;
+    }
+    .bubble-candidate {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 12px 12px 2px 12px;
+    }
+    .exchange-block {
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .prompt-box {
+        background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+        border-left: 4px solid #0284c7;
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05);
+    }
+    .turn-history-scroll {
+        flex-grow: 1;
+        min-height: 380px;
+        max-height: 520px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row g-4 justify-content-center">
-    <!-- Top Header -->
-    <div class="col-lg-10">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <!-- Top Header & Session Bar -->
+    <div class="col-xl-11 col-xxl-10">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pb-2 border-bottom border-secondary border-opacity-25">
             <div>
                 <a href="/student" class="text-decoration-none text-secondary small">&larr; Back to Dashboard</a>
                 <h3 class="mb-0 mt-1">UKVI Credibility Voice Interview</h3>
                 <p class="text-secondary small mb-0">Bank: <strong>{{ assigned_bank.title }}</strong> &bull; Tier: <span class="badge bg-info text-dark">{{ assigned_bank.difficulty }}</span></p>
             </div>
-            <div class="d-flex align-items-center gap-3">
-                <span id="connectionBadge" class="badge bg-warning text-dark px-3 py-2 fs-6">Initializing...</span>
+            <div class="d-flex align-items-center gap-2">
+                <span id="connectionBadge" class="badge bg-secondary px-3 py-2 fs-6">Ready to Start</span>
                 <button id="leaveBtn" class="btn btn-outline-danger btn-sm" onclick="disconnectRoom()">Leave Session</button>
             </div>
         </div>
     </div>
 
-    <!-- Main Voice & Question Area -->
-    <div class="col-lg-10">
-        <div class="row g-4">
-            <!-- Left: Current Question & Mic -->
-            <div class="col-md-7">
-                <div class="card p-4 h-100 shadow-sm border-primary border-opacity-50">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span id="topicBadge" class="badge bg-secondary">Topic 1 of {{ assigned_bank.topics|length }}</span>
-                        <span id="timerBadge" class="badge bg-dark border border-secondary text-info">Timer: Ready</span>
-                    </div>
-
-                    <div class="mb-4">
-                        <h6 class="text-uppercase text-secondary small mb-2">Interviewer Prompt</h6>
-                        <h4 id="questionPrompt" class="text-light fw-normal" style="min-height: 90px; line-height: 1.5;">
-                            Connecting to LiveKit media server and preparing your first credibility examination question...
-                        </h4>
-                    </div>
-
-                    <!-- Audio Waveform Visualizer -->
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="small text-secondary">Candidate Audio Waveform</span>
-                            <span id="micStatusText" class="small text-success">Mic Active</span>
+    <!-- Main Voice & Scorecard Area -->
+    <div class="col-xl-11 col-xxl-10">
+        <div class="row g-4 align-items-stretch">
+            <!-- Left: Current Question, Mic Waveform & Live Interaction -->
+            <div class="col-lg-7 d-flex flex-column">
+                <div class="card p-4 flex-grow-1 shadow-sm border-primary border-opacity-25 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span id="topicBadge" class="badge bg-secondary px-3 py-1">Topic 1 of {{ assigned_bank.topics|length }}</span>
+                            <span id="timerBadge" class="badge bg-dark border border-secondary text-info px-3 py-1 font-monospace">Timer: 45s</span>
                         </div>
-                        <canvas id="waveformCanvas" class="audio-visualizer"></canvas>
+
+                        <!-- Spoken Question Prompt Display -->
+                        <div class="prompt-box p-4 rounded mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span id="promptBoxHeader" class="text-info fw-semibold">UKVI Examiner</span>
+                                <div id="examinerSpeakingBadge" class="d-none">
+                                    <div class="speaker-wave me-1">
+                                        <div class="speaker-bar"></div>
+                                        <div class="speaker-bar"></div>
+                                        <div class="speaker-bar"></div>
+                                    </div>
+                                    <span id="examinerSpeakingText" class="small text-info">Examiner Speaking... (Mic Muted 🔇)</span>
+                                </div>
+                            </div>
+                            <h4 id="questionPrompt" class="fw-normal mb-0 line-height-base text-light">
+                                Welcome to your official UKVI Viva Assessment. Click "Start Voice Interview" when you are ready.
+                            </h4>
+                        </div>
+
+                        <!-- Real-time Candidate Speech Transcript Box -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="small text-secondary fw-semibold">Your Live Spoken Response (Speech-to-Text):</label>
+                                <span id="sttStatusBadge" class="badge bg-secondary">Standby</span>
+                            </div>
+                            <div id="candidateLiveTranscript" class="p-3 rounded bg-dark border border-secondary text-secondary font-monospace small" style="min-height: 80px; max-height: 120px; overflow-y: auto;">
+                                Microphone muted during examiner turns.
+                            </div>
+                        </div>
+
+                        <!-- Microphone Audio Level Waveform -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-secondary">Microphone Input Level</span>
+                                <span id="micStatusText" class="small text-warning">Mic Muted</span>
+                            </div>
+                            <canvas id="waveformCanvas" class="audio-visualizer"></canvas>
+                        </div>
                     </div>
 
-                    <!-- Mic Controls -->
-                    <div class="d-flex justify-content-center align-items-center gap-3 mt-2">
-                        <button id="toggleMicBtn" class="btn btn-primary btn-lg rounded-circle p-3 mic-pulse" onclick="toggleMicrophone()" style="width: 64px; height: 64px;">
-                            🎙️
-                        </button>
-                        <button id="startSessionBtn" class="btn btn-success px-4 py-2" onclick="connectToInterview()">
-                            Join WebRTC Room
-                        </button>
+                    <!-- Interview Navigation & Interaction Controls -->
+                    <div class="pt-3 border-top border-secondary border-opacity-25">
+                        <div id="startContainer" class="d-flex justify-content-center">
+                            <button id="startSessionBtn" class="btn btn-primary btn-lg px-5 py-3 shadow fw-semibold" onclick="connectToInterview()">
+                                🎙️ Start Voice Interview
+                            </button>
+                        </div>
+                        <div id="activeControlsContainer" class="d-flex justify-content-between align-items-center d-none flex-wrap gap-2">
+                            <div class="d-flex gap-2">
+                                <button id="skipInstructionBtn" class="btn btn-outline-info btn-sm d-none" onclick="skipInstructionAudio()">
+                                    ⏩ Skip Briefing
+                                </button>
+                                <button id="replaySpeechBtn" class="btn btn-outline-secondary btn-sm d-none" onclick="replayInterviewerSpeech()">
+                                    🔁 Replay Question
+                                </button>
+                            </div>
+                            <div class="d-flex align-items-center gap-3">
+                                <button id="toggleMicBtn" class="btn btn-secondary rounded-circle p-2" style="width: 44px; height: 44px;" onclick="toggleMicrophone()" title="Manual Mic Gate">
+                                    🎙️
+                                </button>
+                                <button id="submitTurnBtn" class="btn btn-success px-4 py-2 fw-semibold shadow-sm" onclick="submitCandidateTurn()">
+                                    ✅ Finished Speaking / Submit Turn
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Real-time Live Turn Scorecard -->
-            <div class="col-md-5">
-                <div class="card p-4 h-100 shadow-sm">
-                    <h5 class="card-title text-info mb-3">Real-Time Turn Scorecard</h5>
-                    <p class="small text-secondary mb-3">Evaluations are streamed over native WebRTC DataChannels directly as you speak.</p>
+            <!-- Right: Real-time Live Viva Dialogue Transcript (SPEC-009) -->
+            <div class="col-lg-5 d-flex flex-column">
+                <div class="card p-4 flex-grow-1 shadow-sm border-secondary border-opacity-25 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="card-title text-info mb-0">Live Viva Dialogue Transcript</h5>
+                        <span id="turnCounterBadge" class="badge bg-secondary">0 Exchanges</span>
+                    </div>
+                    <p class="small text-secondary mb-3">Verbatim examiner prompts and your spoken responses recorded in real-time.</p>
 
-                    <div id="scorecardBody">
-                        <div class="text-center py-4 text-secondary">
-                            <span class="fs-1 mb-2 d-block">📊</span>
-                            <p class="mb-0">Waiting for candidate response...</p>
+                    <div id="scorecardBody" class="turn-history-scroll">
+                        <div id="scorecardPlaceholder" class="text-center py-5 text-secondary">
+                            <span class="fs-1 mb-2 d-block">💬</span>
+                            <p class="mb-0">Standby • The viva dialogue transcript will appear here as each exchange progresses.</p>
                         </div>
                     </div>
 
@@ -112,10 +205,10 @@
                     <div id="finalReportCard" class="card bg-success bg-opacity-10 border-success p-3 mt-3 d-none">
                         <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h6 class="text-success mb-1">Interview Concluded</h6>
+                                <h6 class="text-success mb-1">UKVI Assessment Concluded</h6>
                                 <p class="small text-light mb-0" id="finalRecommendationText">UKVI report generated.</p>
                             </div>
-                            <a href="/student/results" class="btn btn-success btn-sm">View Full CAS Report</a>
+                            <a href="/student/results" class="btn btn-success btn-sm">View CAS Report</a>
                         </div>
                     </div>
                 </div>
@@ -124,8 +217,11 @@
     </div>
 </div>
 
-<!-- Audio element for AI synthesized speech -->
-<audio id="interviewerAudio" autoplay></audio>
+<!-- Dedicated audio element for LiveKit WebRTC peer audio streams -->
+<audio id="livekitAudioTrack" autoplay playsinline></audio>
+
+<!-- Audio element for AI synthesized speech and instructions -->
+<audio id="interviewerAudio" preload="auto"></audio>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -133,141 +229,84 @@
 <script src="/static/vendor/livekit/livekit-client.umd.min.js"></script>
 
 <script>
+    // Strict Turn-Based Finite State Machine (SPEC-008)
+    const STATES = {
+        STANDBY: "STANDBY",
+        CONNECTING: "CONNECTING",
+        INSTRUCTION: "INSTRUCTION",
+        QUESTION_PLAYING: "QUESTION_PLAYING",
+        CANDIDATE_TURN: "CANDIDATE_TURN",
+        EVALUATION_WAITING: "EVALUATION_WAITING",
+        CONCLUDED: "CONCLUDED"
+    };
+
+    let currentState = STATES.STANDBY;
     let currentRoom = null;
-    let isMicEnabled = true;
+    let isMicEnabled = false;
     let audioContext = null;
     let analyser = null;
     let animationId = null;
+    let recognition = null;
+    let currentCandidateTranscript = "";
+    let turnTimerInterval = null;
+    let vadCheckInterval = null;
+    let remainingSeconds = 45;
+    let isOvertime = false;
+    let overtimeSeconds = 0;
+    let lastSpeechTimestamp = 0;
+    let lastAudioEnergyTimestamp = 0;
+    let turnCount = 0;
+    let latestQuestionText = "";
+    let hasReceivedQuestion = false;
+    let isInstructionCompleted = false;
+    let pendingQuestionPacket = null;
+    let handshakeInterval = null;
+    let mediaStream = null;
+    let currentAudioCallback = null;
 
-    // Connect to room when user clicks or page mounts
-    async function connectToInterview() {
-        const badge = document.getElementById("connectionBadge");
-        const startBtn = document.getElementById("startSessionBtn");
-        startBtn.disabled = true;
-        badge.className = "badge bg-info text-dark px-3 py-2 fs-6";
-        badge.innerText = "Requesting Token...";
+    // Send client readiness handshake to worker
+    function sendClientReady() {
+        if (currentRoom && currentRoom.localParticipant) {
+            const readyPacket = new TextEncoder().encode(JSON.stringify({ type: "client_ready" }));
+            currentRoom.localParticipant.publishData(readyPacket, { reliable: true });
+        }
+    }
 
-        try {
-            // 1. Fetch token and room coordinates from FastAPI
-            const res = await fetch("/student/token");
-            if (!res.ok) {
-                const err = await res.json();
-                alert("Gate Error: " + (err.detail || "Cannot start interview"));
-                badge.className = "badge bg-danger px-3 py-2 fs-6";
-                badge.innerText = "Gate Blocked";
+    function startHandshakeRetry() {
+        if (handshakeInterval) clearInterval(handshakeInterval);
+        let retries = 0;
+        sendClientReady();
+        handshakeInterval = setInterval(() => {
+            if (hasReceivedQuestion || !currentRoom || currentRoom.state !== "connected") {
+                clearInterval(handshakeInterval);
+                handshakeInterval = null;
                 return;
             }
-            const tokenData = await res.json();
-            badge.innerText = "Connecting WebRTC...";
-
-            // 2. Initialize LiveKit Room using vendored LivekitClient
-            const { Room, RoomEvent, Track } = LivekitClient;
-            currentRoom = new Room({
-                adaptiveStream: true,
-                dynacast: true,
-            });
-
-            // 3. Audio track subscription
-            currentRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-                if (track.kind === Track.Kind.Audio) {
-                    const audioElement = document.getElementById("interviewerAudio");
-                    track.attach(audioElement);
-                    console.log("[LiveKit] Subscribed to interviewer audio track.");
-                }
-            });
-
-            // 4. DataChannel messages for real-time scorecard and prompts
-            currentRoom.on(RoomEvent.DataReceived, (payload, participant) => {
-                try {
-                    const text = new TextDecoder().decode(payload);
-                    const msg = JSON.parse(text);
-                    handleDataChannelMessage(msg);
-                } catch (e) {
-                    console.error("[DataChannel] Failed to parse message:", e);
-                }
-            });
-
-            // 5. Disconnect Guard
-            currentRoom.on(RoomEvent.Disconnected, () => {
-                badge.className = "badge bg-danger px-3 py-2 fs-6";
-                badge.innerText = "Disconnected";
-                document.getElementById("micStatusText").innerText = "Offline";
-                document.getElementById("toggleMicBtn").classList.remove("mic-pulse");
-            });
-
-            // 6. Connect to LiveKit server
-            await currentRoom.connect(tokenData.livekit_url, tokenData.token);
-            badge.className = "badge bg-success px-3 py-2 fs-6";
-            badge.innerText = "Connected 🟢";
-            startBtn.classList.add("d-none");
-
-            // 7. Enable microphone and start waveform canvas
-            await currentRoom.localParticipant.setMicrophoneEnabled(true);
-            initAudioVisualizer();
-
-        } catch (error) {
-            console.error("[LiveKit] Connection failed:", error);
-            badge.className = "badge bg-danger px-3 py-2 fs-6";
-            badge.innerText = "Connection Failed";
-            startBtn.disabled = false;
-        }
-    }
-
-    // Process incoming WebRTC DataChannel packets
-    function handleDataChannelMessage(msg) {
-        console.log("[DataChannel Message Received]:", msg);
-
-        if (msg.type === "session_ready") {
-            document.getElementById("questionPrompt").innerText = 
-                "Session authorized. The AI examiner will speak your first credibility question shortly...";
-        } else if (msg.type === "question") {
-            document.getElementById("questionPrompt").innerText = msg.prompt || msg.question_text;
-            if (msg.topic_name) {
-                document.getElementById("topicBadge").innerText = msg.topic_name;
+            retries++;
+            if (retries > 25) {
+                clearInterval(handshakeInterval);
+                handshakeInterval = null;
+                console.warn("[LiveKit] Handshake retry limit reached.");
+                return;
             }
-        } else if (msg.type === "turn_evaluation") {
-            updateScorecard(msg.data || msg);
-        } else if (msg.type === "final_evaluation") {
-            renderFinalReport(msg.final_evaluation || msg);
+            console.log(`[LiveKit] Retrying question handshake (${retries}/25)...`);
+            sendClientReady();
+        }, 1200);
+    }
+
+    // Microphone Hardware & UI Control Helper
+    async function setMicActive(active) {
+        isMicEnabled = active;
+        if (currentRoom && currentRoom.localParticipant) {
+            try {
+                await currentRoom.localParticipant.setMicrophoneEnabled(active);
+            } catch (e) {
+                console.warn("[LiveKit] Mic toggle error:", e);
+            }
         }
-    }
-
-    function updateScorecard(data) {
-        const score = data.accuracy_score !== undefined ? data.accuracy_score : (data.score || 0);
-        const isPassed = data.is_passed;
-        const isReask = data.is_reask;
-        const matched = data.matched_keywords || [];
-        const feedback = data.feedback || "Answer evaluated.";
-
-        const card = document.getElementById("scorecardBody");
-        card.innerHTML = `
-            <div class="p-3 rounded mb-3 ${isPassed ? 'bg-success' : (isReask ? 'bg-warning text-dark' : 'bg-danger')} bg-opacity-25 border ${isPassed ? 'border-success' : (isReask ? 'border-warning' : 'border-danger')}">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-bold">${isPassed ? '✅ Passed (≥ 70%)' : (isReask ? '⚠️ Re-Ask Probing' : '❌ Needs Improvement')}</span>
-                    <span class="badge ${isPassed ? 'bg-success' : (isReask ? 'bg-warning text-dark' : 'bg-danger')} fs-6">${score.toFixed(1)}%</span>
-                </div>
-                <p class="small mb-2">${feedback}</p>
-                <div class="d-flex flex-wrap gap-1 mt-2">
-                    ${matched.map(k => `<span class="chip chip-matched">✓ ${k}</span>`).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    function renderFinalReport(finalData) {
-        const reportCard = document.getElementById("finalReportCard");
-        reportCard.classList.remove("d-none");
-        const recText = document.getElementById("finalRecommendationText");
-        recText.innerText = `Score: ${finalData.overall_score || 0}% • Status: ${finalData.overall_status || 'Complete'}`;
-    }
-
-    async function toggleMicrophone() {
-        if (!currentRoom) return;
-        isMicEnabled = !isMicEnabled;
-        await currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled);
         const btn = document.getElementById("toggleMicBtn");
         const text = document.getElementById("micStatusText");
-        if (isMicEnabled) {
+        if (active) {
             btn.classList.add("btn-primary", "mic-pulse");
             btn.classList.remove("btn-secondary");
             btn.innerText = "🎙️";
@@ -282,27 +321,907 @@
         }
     }
 
-    function disconnectRoom() {
-        if (currentRoom) {
-            currentRoom.disconnect();
-            currentRoom = null;
+    // Connect to room when user clicks "Start Voice Interview"
+    async function connectToInterview() {
+        const badge = document.getElementById("connectionBadge");
+        const startBtn = document.getElementById("startSessionBtn");
+        startBtn.disabled = true;
+        startBtn.innerText = "Connecting...";
+        badge.className = "badge bg-info text-dark px-3 py-2 fs-6";
+        badge.innerText = "Requesting Token...";
+        currentState = STATES.CONNECTING;
+
+        // Transition prompt box
+        const promptEl = document.getElementById("questionPrompt");
+        promptEl.innerHTML = '<span class="spinner-border spinner-border-sm text-info me-2"></span>Connecting to UKVI Examiner & loading assessment parameters...';
+
+        try {
+            // 1. Fetch token and room coordinates from FastAPI
+            const res = await fetch("/student/token");
+            if (!res.ok) {
+                let errorDetail = "Could not initialize interview session.";
+                try {
+                    const errData = await res.json();
+                    errorDetail = errData.detail || errorDetail;
+                } catch (e) {
+                    errorDetail = (await res.text()) || res.statusText || "Server error";
+                }
+                alert("Session Error: " + errorDetail);
+                badge.className = "badge bg-danger px-3 py-2 fs-6";
+                badge.innerText = "Error " + res.status;
+                startBtn.disabled = false;
+                startBtn.innerText = "🎙️ Start Voice Interview";
+                promptEl.innerText = 'Click "Start Voice Interview" below when you are ready.';
+                currentState = STATES.STANDBY;
+                return;
+            }
+            const tokenData = await res.json();
+            badge.innerText = "Connecting WebRTC...";
+
+            // 2. Resolve LiveKit URL dynamically
+            let livekitUrl = tokenData.livekit_url;
+            if (livekitUrl) {
+                try {
+                    const parsed = new URL(livekitUrl);
+                    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "livekit") {
+                        parsed.hostname = window.location.hostname;
+                    }
+                    if (window.location.protocol === "https:" && parsed.protocol === "ws:") {
+                        parsed.protocol = "wss:";
+                    }
+                    livekitUrl = parsed.toString();
+                } catch (e) {
+                    console.warn("Could not parse livekit_url, using as is:", livekitUrl);
+                }
+            }
+
+            // 3. Initialize LiveKit Room using vendored LivekitClient
+            const { Room, RoomEvent, Track } = LivekitClient;
+            currentRoom = new Room({
+                adaptiveStream: false,
+                dynacast: false,
+                singlePeerConnection: false,
+            });
+
+            // 4. Audio track subscription
+            currentRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+                if (track.kind === Track.Kind.Audio) {
+                    const audioElement = document.getElementById("livekitAudioTrack");
+                    if (audioElement) {
+                        track.attach(audioElement);
+                        console.log("[LiveKit] Subscribed to interviewer audio track.");
+                    }
+                }
+            });
+
+            // 5. DataChannel messages
+            currentRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+                try {
+                    const text = new TextDecoder().decode(payload);
+                    const msg = JSON.parse(text);
+                    handleDataChannelMessage(msg);
+                } catch (e) {
+                    console.error("[DataChannel] Failed to parse message:", e);
+                }
+            });
+
+            // 6. Disconnect Guard
+            currentRoom.on(RoomEvent.Disconnected, () => {
+                badge.className = "badge bg-danger px-3 py-2 fs-6";
+                badge.innerText = "Disconnected";
+                document.getElementById("micStatusText").innerText = "Offline";
+                document.getElementById("toggleMicBtn").classList.remove("mic-pulse");
+                stopTurnTimer();
+                stopInterviewerAudio();
+                stopSpeechRecognition();
+                currentState = STATES.STANDBY;
+            });
+
+            // 7. Connect to LiveKit server
+            await currentRoom.connect(livekitUrl, tokenData.token);
+            badge.className = "badge bg-success px-3 py-2 fs-6";
+            badge.innerText = "Connected 🟢";
+
+            // Switch from Standby to Active controls state
+            document.getElementById("startContainer").classList.add("d-none");
+            document.getElementById("activeControlsContainer").classList.remove("d-none");
+
+            // 8. Initialize visualizer with microphone HARD-MUTED by default
+            try {
+                await setMicActive(false);
+                await initAudioVisualizer();
+            } catch (micErr) {
+                console.warn("[LiveKit] Mic setup note:", micErr);
+            }
+
+            // 9. Enter SPEC-008 Static Instruction Phase
+            enterInstructionPhase();
+
+            // 10. Start readiness handshake with agent worker in background
+            startHandshakeRetry();
+
+        } catch (error) {
+            console.error("[LiveKit] Connection failed:", error);
+            badge.className = "badge bg-danger px-3 py-2 fs-6";
+            badge.innerText = "Connection Failed";
+            startBtn.disabled = false;
+            startBtn.innerText = "🎙️ Start Voice Interview";
+            promptEl.innerText = 'Click "Start Voice Interview" below when you are ready.';
+            currentState = STATES.STANDBY;
+            alert("Could not establish WebRTC media connection. Please verify LiveKit server is running on port 7880.");
         }
-        if (animationId) cancelAnimationFrame(animationId);
-        window.location.href = "/student";
     }
 
-    // Audio Waveform Animation via Web Audio API
+    // SPEC-008: Instruction Phase Handler
+    function enterInstructionPhase() {
+        currentState = STATES.INSTRUCTION;
+        isInstructionCompleted = false;
+        console.log("[FSM] State -> INSTRUCTION");
+
+        // Hard-mute microphone and ensure STT is deactivated
+        setMicActive(false);
+        stopSpeechRecognition();
+
+        document.getElementById("promptBoxHeader").innerText = "UKVI Official Examination Briefing";
+        document.getElementById("questionPrompt").innerHTML = `
+            <div class="d-flex flex-column gap-2 py-1">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pb-2 border-bottom border-info border-opacity-25">
+                    <span class="badge bg-primary bg-opacity-25 text-info border border-info border-opacity-50 px-2 py-1 small">
+                        🇬🇧 Official UKVI Admissions & Viva Guidelines
+                    </span>
+                    <span class="small text-secondary font-monospace">Voice: en-GB-SoniaNeural</span>
+                </div>
+                <div class="row g-2 pt-2 small text-light">
+                    <div class="col-md-6">
+                        <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                            <strong class="text-info">1. Turn-Based Viva:</strong> The examiner asks questions across your assigned credibility modules.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                            <strong class="text-info">2. Gated Microphone:</strong> Mic is strictly muted while the examiner speaks to ensure zero echo.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                            <strong class="text-info">3. Automatic Activation:</strong> Mic activates automatically when the examiner finishes.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                            <strong class="text-info">4. Timed Turn:</strong> Answer clearly within the timer, then click <em>Submit Turn</em>.
+                        </div>
+                    </div>
+                </div>
+                <p class="small text-secondary mb-0 mt-1">
+                    🎧 <em>Audio briefing in progress. Listen carefully, or click <strong>Skip Briefing</strong> to proceed immediately.</em>
+                </p>
+            </div>
+        `;
+
+        const skipBtn = document.getElementById("skipInstructionBtn");
+        skipBtn.classList.remove("d-none");
+        document.getElementById("replaySpeechBtn").classList.add("d-none");
+
+        const speakerBadge = document.getElementById("examinerSpeakingBadge");
+        document.getElementById("examinerSpeakingText").innerText = "Examiner Briefing... (Mic Muted 🔇)";
+        speakerBadge.classList.remove("d-none");
+
+        const sttBadge = document.getElementById("sttStatusBadge");
+        sttBadge.innerText = "Briefing in Progress (Mic Muted)";
+        sttBadge.className = "badge bg-info text-dark";
+
+        const transcriptEl = document.getElementById("candidateLiveTranscript");
+        transcriptEl.innerText = "Microphone muted during examiner briefing. Please listen carefully.";
+        transcriptEl.className = "p-3 rounded bg-dark border border-secondary text-secondary font-monospace small";
+
+        document.getElementById("submitTurnBtn").disabled = true;
+
+        // Play the pre-synthesized static AI instruction audio
+        playAudioStream("/static/audio/interview_instructions.mp3", () => {
+            console.log("[Audio] Instruction briefing playback completed.");
+            onInstructionCompleted();
+        }, "Welcome to your official UKVI Credibility and Academic Admissions Interview. In this session, you will be asked a series of questions regarding your course, university choice, financial readiness, and future career plans. For each question, listen carefully to the examiner. When the examiner finishes speaking, your microphone will automatically activate and the countdown timer will begin. Speak your answer clearly. When you are finished, click Submit Turn to record your response. Please ensure you are in a quiet room. Let us begin with your first question.");
+    }
+
+    function skipInstructionAudio() {
+        if (currentState === STATES.INSTRUCTION) {
+            console.log("[FSM] Candidate skipped instruction briefing.");
+            stopInterviewerAudio();
+            sendClientReady();
+            onInstructionCompleted();
+        }
+    }
+
+    function onInstructionCompleted() {
+        if (isInstructionCompleted) return;
+        isInstructionCompleted = true;
+        document.getElementById("skipInstructionBtn").classList.add("d-none");
+        if (pendingQuestionPacket) {
+            console.log("[FSM] Instruction completed. Transitioning to buffered Question 1.");
+            const q = pendingQuestionPacket;
+            pendingQuestionPacket = null;
+            presentQuestion(q);
+        } else {
+            console.log("[FSM] Instruction completed. Awaiting Question 1 packet from worker...");
+            document.getElementById("promptBoxHeader").innerText = "UKVI Examiner";
+            document.getElementById("questionPrompt").innerHTML = 
+                '<span class="spinner-border spinner-border-sm text-info me-2"></span>Briefing concluded. The examiner is now formulating your first question...';
+            document.getElementById("examinerSpeakingBadge").classList.add("d-none");
+            sendClientReady();
+        }
+    }
+
+    // SPEC-008: Present Interviewer Question (Text + Voice Synchronized, Mic Muted)
+    function presentQuestion(msg) {
+        currentState = STATES.QUESTION_PLAYING;
+        console.log("[FSM] State -> QUESTION_PLAYING:", msg);
+
+        hasReceivedQuestion = true;
+        if (handshakeInterval) {
+            clearInterval(handshakeInterval);
+            handshakeInterval = null;
+        }
+
+        // Hard-mute microphone and stop STT during examiner speech
+        setMicActive(false);
+        stopSpeechRecognition();
+        stopTurnTimer();
+
+        const promptText = msg.prompt || msg.question_text || "";
+        latestQuestionText = promptText;
+
+        // Synchronize visual question text
+        document.getElementById("promptBoxHeader").innerText = "Interviewer Question";
+        document.getElementById("questionPrompt").innerText = promptText;
+        document.getElementById("replaySpeechBtn").classList.remove("d-none");
+        document.getElementById("skipInstructionBtn").classList.add("d-none");
+
+        if (msg.topic_name) {
+            const topicIndex = msg.topic_index || 1;
+            const totalTopics = msg.total_topics || {{ assigned_bank.topics|length }};
+            document.getElementById("topicBadge").innerText = `${msg.topic_name} (${topicIndex}/${totalTopics})`;
+        }
+
+        const speakerBadge = document.getElementById("examinerSpeakingBadge");
+        document.getElementById("examinerSpeakingText").innerText = "Examiner Speaking... (Mic Muted 🔇)";
+        speakerBadge.classList.remove("d-none");
+
+        const sttBadge = document.getElementById("sttStatusBadge");
+        sttBadge.innerText = "Examiner Speaking... (Mic Muted)";
+        sttBadge.className = "badge bg-info text-dark";
+
+        currentCandidateTranscript = "";
+        const transcriptEl = document.getElementById("candidateLiveTranscript");
+        transcriptEl.innerText = "Examiner speaking. Your microphone will activate when the question concludes.";
+        transcriptEl.className = "p-3 rounded bg-dark border border-secondary text-secondary font-monospace small";
+
+        document.getElementById("submitTurnBtn").disabled = true;
+
+        // Stream neural TTS for the question, then unlock candidate turn upon completion
+        const ttsUrl = `/api/tts?text=${encodeURIComponent(promptText)}&t=${Date.now()}`;
+        playAudioStream(ttsUrl, () => {
+            enterCandidateTurn(msg.expected_time_to_ans || 45);
+        }, promptText);
+    }
+
+    // SPEC-008: Candidate Speaking Turn (Mic Unmuted, Timer Active, STT Listening)
+    async function enterCandidateTurn(timeLimit) {
+        currentState = STATES.CANDIDATE_TURN;
+        console.log("[FSM] State -> CANDIDATE_TURN");
+
+        const speakerBadge = document.getElementById("examinerSpeakingBadge");
+        speakerBadge.classList.add("d-none");
+
+        const sttBadge = document.getElementById("sttStatusBadge");
+        sttBadge.innerText = "🎙️ Your Turn - Speak Clearly";
+        sttBadge.className = "badge bg-success";
+
+        currentCandidateTranscript = "";
+        const transcriptEl = document.getElementById("candidateLiveTranscript");
+        transcriptEl.innerText = "Listening for your response... Speak clearly.";
+        transcriptEl.className = "p-3 rounded bg-dark border border-info text-light font-monospace small";
+
+        document.getElementById("submitTurnBtn").disabled = false;
+
+        // UNMUTE Microphone and activate speech-to-text
+        await setMicActive(true);
+        startSpeechRecognition();
+
+        // Start turn countdown timer
+        startTurnTimer(timeLimit || 45);
+    }
+
+    // Process incoming WebRTC DataChannel packets
+    function handleDataChannelMessage(msg) {
+        console.log("[DataChannel Message Received]:", msg);
+
+        if (msg.type === "session_ready") {
+            document.getElementById("connectionBadge").innerText = "Connected 🟢";
+        } else if (msg.type === "question") {
+            if (!isInstructionCompleted) {
+                console.log("[DataChannel] Question arrived during briefing. Buffering Question 1...");
+                pendingQuestionPacket = msg;
+            } else {
+                console.log("[DataChannel] Question arrived after briefing. Presenting question immediately.");
+                pendingQuestionPacket = null;
+                presentQuestion(msg);
+            }
+        } else if (msg.type === "turn_evaluation") {
+            updateScorecard(msg.data || msg);
+        } else if (msg.type === "final_evaluation") {
+            if (handshakeInterval) { clearInterval(handshakeInterval); handshakeInterval = null; }
+            stopTurnTimer();
+            stopInterviewerAudio();
+            stopSpeechRecognition();
+            setMicActive(false);
+            currentState = STATES.CONCLUDED;
+            renderFinalReport(msg.final_evaluation || msg);
+        } else if (msg.type === "error") {
+            if (handshakeInterval) { clearInterval(handshakeInterval); handshakeInterval = null; }
+            const errMsg = msg.message || "An error occurred during interview session initialization.";
+            const badge = document.getElementById("connectionBadge");
+            badge.className = "badge bg-danger px-3 py-2 fs-6";
+            badge.innerText = "Session Error";
+            const promptEl = document.getElementById("questionPrompt");
+            promptEl.innerHTML = `<span class="text-danger fw-semibold">⚠️ ${errMsg}</span><div class="mt-3"><a href="/student" class="btn btn-outline-warning btn-sm">&larr; Return to Dashboard</a></div>`;
+            alert("Interview Error: " + errMsg);
+        }
+    }
+
+    // Live Candidate Speech Recognition via Web Speech API
+    function startSpeechRecognition() {
+        if (currentState !== STATES.CANDIDATE_TURN) return;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn("Web Speech API not supported in this browser.");
+            document.getElementById("sttStatusBadge").innerText = "Audio Streaming";
+            return;
+        }
+
+        try {
+            if (recognition) {
+                try { recognition.abort(); } catch (e) {}
+            }
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = "en-GB";
+
+            recognition.onresult = (event) => {
+                if (currentState !== STATES.CANDIDATE_TURN) return;
+                const now = Date.now();
+                lastSpeechTimestamp = now;
+                lastAudioEnergyTimestamp = now;
+
+                let interimTranscript = "";
+                let finalTranscript = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + " ";
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                if (finalTranscript) {
+                    currentCandidateTranscript += finalTranscript;
+                }
+                const display = (currentCandidateTranscript + " " + interimTranscript).trim();
+                const transcriptEl = document.getElementById("candidateLiveTranscript");
+                if (display) {
+                    transcriptEl.innerText = display;
+                    transcriptEl.className = "p-3 rounded bg-dark border border-info text-light font-monospace small";
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.warn("[SpeechRecognition] Error:", event.error);
+            };
+
+            recognition.onend = () => {
+                if (currentState === STATES.CANDIDATE_TURN && currentRoom && currentRoom.state === "connected") {
+                    try { recognition.start(); } catch (e) {}
+                }
+            };
+
+            recognition.start();
+        } catch (e) {
+            console.warn("[SpeechRecognition] Init error:", e);
+        }
+    }
+
+    function stopSpeechRecognition() {
+        if (recognition) {
+            try { recognition.abort(); } catch (e) {}
+            recognition = null;
+        }
+    }
+
+    // Submit Turn over WebRTC DataChannel
+    async function submitCandidateTurn(isTimeout = false) {
+        if (currentState !== STATES.CANDIDATE_TURN) return;
+
+        const transcriptEl = document.getElementById("candidateLiveTranscript");
+        let answerText = (currentCandidateTranscript || transcriptEl.innerText || "").trim();
+
+        if (answerText === "Listening for your response... Speak clearly." || answerText.startsWith("Listening...")) {
+            answerText = "";
+        }
+
+        if (!answerText) {
+            if (isTimeout) {
+                answerText = "(Candidate provided no audible response / turn timed out)";
+            } else {
+                alert("Please speak your answer into the microphone before submitting.");
+                return;
+            }
+        }
+
+        // Transition to EVALUATION_WAITING
+        currentState = STATES.EVALUATION_WAITING;
+        console.log("[FSM] State -> EVALUATION_WAITING");
+
+        // Stop timer and audio
+        stopTurnTimer();
+        stopInterviewerAudio();
+
+        // Immediately HARD-MUTE mic and stop STT
+        await setMicActive(false);
+        stopSpeechRecognition();
+
+        document.getElementById("sttStatusBadge").innerText = "Evaluating Rubric...";
+        document.getElementById("sttStatusBadge").className = "badge bg-warning text-dark";
+        document.getElementById("submitTurnBtn").disabled = true;
+
+        const promptBox = document.getElementById("questionPrompt");
+        promptBox.innerHTML = '<span class="spinner-border spinner-border-sm text-info me-2"></span>Evaluating your response against the credibility rubric...';
+
+        // Broadcast turn answer packet over DataChannel
+        if (currentRoom && currentRoom.localParticipant) {
+            const payload = {
+                type: "candidate_answer",
+                transcript: answerText,
+                timestamp: Date.now()
+            };
+            const bytes = new TextEncoder().encode(JSON.stringify(payload));
+            currentRoom.localParticipant.publishData(bytes, { reliable: true });
+        }
+    }
+
+    // Helper: Safe HTML escaping for dialogue transcript
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Acoustic Voice Activity Detector (RMS/Energy)
+    function getMicAudioLevel() {
+        if (!analyser || !isMicEnabled) return 0;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+        }
+        return sum / bufferLength; // 0 - 255
+    }
+
+    // Semantic Turn Boundary Analyzer (SPEC-009)
+    function analyzeSemanticTurn(text) {
+        if (!text || !text.trim()) {
+            return { status: "silence", requiredSilenceMs: 2000, reason: "no_text" };
+        }
+        const cleaned = text.trim().toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ").replace(/\s+/g, " ");
+        const words = cleaned.split(" ").filter(Boolean);
+        if (words.length === 0) {
+            return { status: "silence", requiredSilenceMs: 2000, reason: "empty" };
+        }
+
+        // 1. Explicit Turn-Closing Intent (Terminal Markers)
+        // Candidate signals definitive completion -> Rapid silence threshold (1.0s - 1.2s)
+        const terminalPhrases = [
+            "that is all", "that's all", "that is my answer", "that's my answer",
+            "thank you", "i am done", "i'm done", "finished", "that would be all",
+            "nothing else", "i have answered", "that covers it", "that is everything"
+        ];
+        for (const phrase of terminalPhrases) {
+            if (cleaned.endsWith(phrase)) {
+                return { status: "terminal", requiredSilenceMs: 1100, reason: `Terminal phrase: "${phrase}"` };
+            }
+        }
+
+        // 2. Trailing Continuation Markers / Incomplete Thoughts
+        // Candidate paused mid-sentence to think -> Generous silence threshold (3.5s)
+        const continuationWords = [
+            "and", "because", "so", "but", "also", "or", "like", "um", "uh", "well",
+            "to", "in", "at", "of", "with", "for", "that", "which", "as", "if"
+        ];
+        const continuationPhrases = ["for example", "such as", "as well as", "due to", "in addition to", "not only"];
+        for (const phrase of continuationPhrases) {
+            if (cleaned.endsWith(phrase)) {
+                return { status: "continuation", requiredSilenceMs: 3500, reason: `Continuation phrase: "${phrase}"` };
+            }
+        }
+        const lastWord = words[words.length - 1];
+        if (continuationWords.includes(lastWord)) {
+            return { status: "continuation", requiredSilenceMs: 3500, reason: `Continuation word: "${lastWord}"` };
+        }
+
+        // 3. Syntactic sentence-end punctuation in original transcript
+        const trimmedOriginal = text.trim();
+        if (/[.!?]$/.test(trimmedOriginal)) {
+            return { status: "sentence_end", requiredSilenceMs: 1500, reason: "Terminal punctuation" };
+        }
+
+        // 4. Default natural conversational pause threshold (2.0s VAD silence)
+        return { status: "normal", requiredSilenceMs: 2000, reason: "Default conversational pause" };
+    }
+
+    // SPEC-009: Soft-Threshold Turn Timer with VAD Silence & Semantic Detection
+    function startTurnTimer(seconds) {
+        stopTurnTimer();
+        remainingSeconds = seconds || 45;
+        isOvertime = false;
+        overtimeSeconds = 0;
+        const now = Date.now();
+        lastSpeechTimestamp = now;
+        lastAudioEnergyTimestamp = now;
+
+        const badge = document.getElementById("timerBadge");
+        badge.innerText = `Timer: ${remainingSeconds}s`;
+        badge.className = "badge bg-dark border border-secondary text-info px-3 py-1 font-monospace";
+
+        // 1-second cadence countdown clock
+        turnTimerInterval = setInterval(() => {
+            if (currentState !== STATES.CANDIDATE_TURN) {
+                stopTurnTimer();
+                return;
+            }
+
+            if (!isOvertime) {
+                remainingSeconds--;
+                if (remainingSeconds <= 10) {
+                    badge.className = "badge bg-danger text-light px-3 py-1 font-monospace";
+                } else if (remainingSeconds <= 20) {
+                    badge.className = "badge bg-warning text-dark px-3 py-1 font-monospace";
+                }
+                badge.innerText = `Timer: ${remainingSeconds}s`;
+
+                // SOFT-THRESHOLD: At 0s, do NOT cut off the candidate! Allow them to wrap up!
+                if (remainingSeconds <= 0) {
+                    isOvertime = true;
+                    overtimeSeconds = 0;
+                    badge.className = "badge bg-warning text-dark px-3 py-1 font-monospace";
+                    badge.innerText = "Wrapping up... (Finish speaking)";
+                    console.log("[Soft-Threshold Timer] 0s reached. Entering soft overtime phase to let candidate conclude sentence.");
+                }
+            } else {
+                overtimeSeconds++;
+                badge.innerText = `Wrapping up... (+${overtimeSeconds}s)`;
+
+                // Hard safety ceiling after 30 seconds of overtime
+                if (overtimeSeconds >= 30) {
+                    console.log("[Soft-Threshold Timer] Overtime safety cap reached (30s). Auto-submitting turn.");
+                    stopTurnTimer();
+                    submitCandidateTurn(true);
+                }
+            }
+        }, 1000);
+
+        // High-frequency (200ms) VAD & Semantic Turn Detector
+        vadCheckInterval = setInterval(() => {
+            if (currentState !== STATES.CANDIDATE_TURN) {
+                if (vadCheckInterval) {
+                    clearInterval(vadCheckInterval);
+                    vadCheckInterval = null;
+                }
+                return;
+            }
+
+            const audioLevel = getMicAudioLevel();
+            const currTime = Date.now();
+            if (audioLevel > 12) {
+                lastAudioEnergyTimestamp = currTime;
+            }
+
+            const currentText = (currentCandidateTranscript || "").trim();
+            const semantic = analyzeSemanticTurn(currentText);
+            const silenceMs = currTime - Math.max(lastSpeechTimestamp, lastAudioEnergyTimestamp);
+            const isAcousticallyQuiet = audioLevel < 12;
+
+            // Early natural completion detection during regular timer:
+            if (!isOvertime && currentText.length > 15 && semantic.status === "terminal") {
+                if (silenceMs >= semantic.requiredSilenceMs && isAcousticallyQuiet) {
+                    console.log(`[VAD + Semantic] Early submission on terminal intent: ${semantic.reason} (Silence: ${silenceMs}ms)`);
+                    stopTurnTimer();
+                    submitCandidateTurn(false);
+                    return;
+                }
+            }
+
+            // In Soft Overtime: Submit once candidate pauses speaking for required silence duration
+            if (isOvertime) {
+                if (silenceMs >= semantic.requiredSilenceMs && isAcousticallyQuiet) {
+                    console.log(`[Soft Timer VAD] Turn finished in overtime: ${semantic.reason} (Silence: ${silenceMs}ms >= ${semantic.requiredSilenceMs}ms)`);
+                    stopTurnTimer();
+                    submitCandidateTurn(false);
+                }
+            }
+        }, 200);
+    }
+
+    function stopTurnTimer() {
+        if (turnTimerInterval) {
+            clearInterval(turnTimerInterval);
+            turnTimerInterval = null;
+        }
+        if (vadCheckInterval) {
+            clearInterval(vadCheckInterval);
+            vadCheckInterval = null;
+        }
+        isOvertime = false;
+        overtimeSeconds = 0;
+    }
+
+
+    // Stop examiner audio playback
+    function stopInterviewerAudio() {
+        const audioEl = document.getElementById("interviewerAudio");
+        if (audioEl) {
+            audioEl.pause();
+            audioEl.currentTime = 0;
+            audioEl.onended = null;
+            audioEl.onerror = null;
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+        currentAudioCallback = null;
+        const speakerBadge = document.getElementById("examinerSpeakingBadge");
+        if (speakerBadge) speakerBadge.classList.add("d-none");
+    }
+
+    // Unified Audio Stream Player with callback on completion
+    function playAudioStream(url, onEndedCallback, fallbackText) {
+        const audioEl = document.getElementById("interviewerAudio");
+        stopInterviewerAudio();
+
+        currentAudioCallback = onEndedCallback;
+
+        audioEl.src = url;
+        audioEl.load();
+        audioEl.onended = () => {
+            console.log("[Audio] Stream ended naturally.");
+            const cb = currentAudioCallback;
+            currentAudioCallback = null;
+            if (cb) cb();
+        };
+
+        audioEl.onerror = (e) => {
+            console.warn("[Audio] Stream playback error, triggering fallback:", e);
+            const cb = currentAudioCallback;
+            currentAudioCallback = null;
+            if (fallbackText) {
+                fallbackSpeechSynthesis(fallbackText, cb);
+            } else if (cb) {
+                cb();
+            }
+        };
+
+        const playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(err => {
+                console.warn("[Audio] Autoplay deferred or blocked:", err);
+                const cb = currentAudioCallback;
+                currentAudioCallback = null;
+                if (fallbackText) {
+                    fallbackSpeechSynthesis(fallbackText, cb);
+                } else if (cb) {
+                    cb();
+                }
+            });
+        }
+    }
+
+    // Fallback Speech Synthesis using browser Web Speech API
+    function fallbackSpeechSynthesis(text, onEndedCallback) {
+        if (!('speechSynthesis' in window)) {
+            if (onEndedCallback) onEndedCallback();
+            return;
+        }
+        try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.95;
+            const voices = window.speechSynthesis.getVoices();
+            const ukVoice = voices.find(v => v.lang === 'en-GB') || voices.find(v => v.lang.startsWith('en'));
+            if (ukVoice) utterance.voice = ukVoice;
+
+            utterance.onend = () => {
+                if (onEndedCallback) onEndedCallback();
+            };
+            utterance.onerror = () => {
+                if (onEndedCallback) onEndedCallback();
+            };
+
+            window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.warn("[TTS Fallback] Speech synthesis error:", e);
+            if (onEndedCallback) onEndedCallback();
+        }
+    }
+
+    // Replay Interviewer Speech with turn-safety
+    function replayInterviewerSpeech() {
+        if (!latestQuestionText) return;
+        if (currentState !== STATES.CANDIDATE_TURN && currentState !== STATES.QUESTION_PLAYING) return;
+
+        // Temporarily pause candidate turn, mute mic, and pause timer
+        setMicActive(false);
+        stopSpeechRecognition();
+        stopTurnTimer();
+
+        const speakerBadge = document.getElementById("examinerSpeakingBadge");
+        document.getElementById("examinerSpeakingText").innerText = "Examiner Replaying... (Mic Muted 🔇)";
+        speakerBadge.classList.remove("d-none");
+
+        const ttsUrl = `/api/tts?text=${encodeURIComponent(latestQuestionText)}&t=${Date.now()}`;
+        playAudioStream(ttsUrl, () => {
+            enterCandidateTurn(remainingSeconds > 5 ? remainingSeconds : 45);
+        }, latestQuestionText);
+    }
+
+    // SPEC-009: Live Viva Dialogue Transcript Renderer (Zero Rubric Leaks)
+    function appendDialogueTurn(data) {
+        turnCount++;
+        const badge = document.getElementById("turnCounterBadge");
+        if (badge) badge.innerText = `${turnCount} Exchanges`;
+
+        const card = document.getElementById("scorecardBody");
+        const placeholder = document.getElementById("scorecardPlaceholder");
+        if (placeholder) placeholder.remove();
+
+        const isReask = data.is_reask;
+        const spokenPrompt = data.spoken_prompt || latestQuestionText || "(Examiner Prompt)";
+        const candidateTranscript = data.candidate_transcript || "(No audible response recorded)";
+
+        const exchangeHtml = `
+            <div class="exchange-block mb-3 p-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+                <div class="d-flex justify-content-between align-items-center mb-2 pb-1 border-bottom border-secondary border-opacity-25">
+                    <span class="small fw-semibold text-info">Exchange #${turnCount}</span>
+                    ${isReask ? '<span class="badge bg-warning text-dark small">⚠️ Clarification / Probing Turn</span>' : '<span class="badge bg-secondary text-light small">Standard Question</span>'}
+                </div>
+
+                <!-- Examiner Prompt Bubble -->
+                <div class="p-2 mb-2 rounded bubble-examiner">
+                    <div class="small text-info fw-bold mb-1">🎙️ UKVI Examiner:</div>
+                    <div class="small text-light">${escapeHtml(spokenPrompt)}</div>
+                </div>
+
+                <!-- Candidate Response Bubble -->
+                <div class="p-2 rounded bubble-candidate">
+                    <div class="small text-secondary fw-bold mb-1">👤 Candidate Response:</div>
+                    <div class="small text-light font-monospace">${escapeHtml(candidateTranscript)}</div>
+                </div>
+            </div>
+        `;
+
+        card.insertAdjacentHTML('beforeend', exchangeHtml);
+        card.scrollTop = card.scrollHeight;
+    }
+
+    function updateScorecard(data) {
+        appendDialogueTurn(data);
+    }
+
+
+    function renderFinalReport(finalData) {
+        const reportCard = document.getElementById("finalReportCard");
+        reportCard.classList.remove("d-none");
+        const recText = document.getElementById("finalRecommendationText");
+        recText.innerText = `Score: ${(finalData.overall_score || 0).toFixed(1)}% • Recommendation: ${finalData.ukvi_recommendation || 'Genuine'}`;
+        document.getElementById("connectionBadge").innerText = "Concluded 🏁";
+        document.getElementById("connectionBadge").className = "badge bg-info text-dark px-3 py-2 fs-6";
+        document.getElementById("sttStatusBadge").innerText = "Session Complete";
+        document.getElementById("submitTurnBtn").disabled = true;
+    }
+
+    // Manual Mic Toggle - Only allowed during Candidate's Turn
+    async function toggleMicrophone() {
+        if (currentState !== STATES.CANDIDATE_TURN) {
+            alert("Microphone is controlled automatically during examiner turns.");
+            return;
+        }
+        await setMicActive(!isMicEnabled);
+    }
+
+    // Discard and end session
+    async function disconnectRoom() {
+        if (confirm("Are you sure you want to discard this interview session? Unconfirmed progress will be terminated immediately.")) {
+            if (handshakeInterval) { clearInterval(handshakeInterval); handshakeInterval = null; }
+            stopTurnTimer();
+            stopInterviewerAudio();
+            stopSpeechRecognition();
+            setMicActive(false);
+            currentState = STATES.STANDBY;
+
+            if (mediaStream) {
+                try {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                } catch(e) {}
+            }
+            if (audioContext && audioContext.state !== "closed") {
+                try { audioContext.close(); audioContext = null; } catch(e) {}
+            }
+
+            try {
+                await fetch("/student/discard", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: "Candidate voluntarily discarded session" })
+                });
+            } catch (e) {
+                console.warn("Discard tracking call failed:", e);
+            }
+
+            if (currentRoom && currentRoom.localParticipant) {
+                try {
+                    const discardPacket = new TextEncoder().encode(JSON.stringify({
+                        type: "discard_session",
+                        reason: "Candidate clicked Leave Session"
+                    }));
+                    currentRoom.localParticipant.publishData(discardPacket, { reliable: true });
+                } catch(e) {}
+            }
+
+            if (currentRoom) {
+                try { await currentRoom.disconnect(); } catch(e) {}
+                currentRoom = null;
+            }
+            if (animationId) cancelAnimationFrame(animationId);
+            window.location.href = "/student";
+        }
+    }
+
+    // Audio Waveform Animation
     async function initAudioVisualizer() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContext.state === "suspended") {
+                audioContext.resume();
+            }
+
+            if (!mediaStream) {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
             analyser = audioContext.createAnalyser();
-            analyser.fftSize = 128;
-            const source = audioContext.createMediaStreamSource(stream);
+            analyser.fftSize = 64;
+            const source = audioContext.createMediaStreamSource(mediaStream);
             source.connect(analyser);
 
             const canvas = document.getElementById("waveformCanvas");
             const ctx = canvas.getContext("2d");
+
+            function resizeCanvas() {
+                if (canvas.parentElement) {
+                    canvas.width = canvas.parentElement.clientWidth;
+                    canvas.height = 70;
+                }
+            }
+            resizeCanvas();
+            window.addEventListener("resize", resizeCanvas);
+
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
 
@@ -310,7 +1229,7 @@
                 animationId = requestAnimationFrame(draw);
                 analyser.getByteFrequencyData(dataArray);
 
-                ctx.fillStyle = "rgba(15, 23, 42, 0.4)";
+                ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 const barWidth = (canvas.width / bufferLength) * 1.5;
@@ -318,14 +1237,14 @@
 
                 for (let i = 0; i < bufferLength; i++) {
                     const barHeight = (dataArray[i] / 255) * canvas.height;
-                    ctx.fillStyle = isMicEnabled ? "#0d6efd" : "#6c757d";
+                    ctx.fillStyle = isMicEnabled ? "#0284c7" : "#64748b";
                     ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
                     x += barWidth;
                 }
             }
             draw();
         } catch (e) {
-            console.warn("Visualizer audio context error:", e);
+            console.warn("Visualizer init error:", e);
         }
     }
 </script>

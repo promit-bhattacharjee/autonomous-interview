@@ -1,0 +1,161 @@
+{% extends "admin/layout.html" %}
+
+{% block title %}Question Banks - UKVI Admissions Command Center{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Header & Breadcrumbs -->
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <div>
+                <a href="/admin" class="text-decoration-none text-secondary small">&larr; Back to Admin Dashboard</a>
+                <h2 class="mb-0 mt-1">Question Banks Management</h2>
+                <p class="text-secondary small mb-0">Curriculum-driven question generation trees and interview topics</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="#generateBankCard" class="btn btn-primary btn-sm">+ Generate New Bank</a>
+                <a href="/admin/evaluations" class="btn btn-outline-info btn-sm">Audit Evaluations 📊</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary KPI Metrics -->
+    <div class="col-12">
+        <div class="row g-3">
+            <div class="col-md-3 col-sm-6">
+                <div class="card p-3 shadow-sm border-primary border-opacity-25">
+                    <div class="text-secondary small">Total Question Banks</div>
+                    <div class="fs-3 fw-bold text-primary">{{ banks|length }}</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card p-3 shadow-sm border-success border-opacity-25">
+                    <div class="text-secondary small">Active / Live Banks</div>
+                    <div class="fs-3 fw-bold text-success">
+                        {{ banks|selectattr("is_active", "equalto", True)|list|length }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card p-3 shadow-sm border-warning border-opacity-25">
+                    <div class="text-secondary small">Draft / Inactive Banks</div>
+                    <div class="fs-3 fw-bold text-warning">
+                        {{ banks|selectattr("is_active", "equalto", False)|list|length }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="card p-3 shadow-sm border-info border-opacity-25">
+                    <div class="text-secondary small">Generator Graph</div>
+                    <div class="fs-3 fw-bold text-info">Online ⚡</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banks Listing Table -->
+    <div class="col-lg-8">
+        <div class="card p-4 shadow-sm h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="card-title mb-0">Configured Banks</h4>
+                <span class="badge bg-secondary">{{ banks|length }} Available</span>
+            </div>
+
+            {% if banks %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Title</th>
+                                <th>Difficulty</th>
+                                <th>Topics</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in banks %}
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold text-light">{{ b.title }}</div>
+                                    <div class="text-secondary small">{{ b.created_at.strftime('%Y-%m-%d') if b.created_at else '' }}</div>
+                                </td>
+                                <td>
+                                    <span class="badge {% if b.difficulty.value == 'Easy' or b.difficulty == 'Easy' %}bg-success{% elif b.difficulty.value == 'Medium' or b.difficulty == 'Medium' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                        {{ b.difficulty.value if b.difficulty.value is defined else b.difficulty }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-dark border border-secondary">{{ b.topics|length }} Topics</span>
+                                </td>
+                                <td>
+                                    {% if b.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Draft</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/admin/banks/{{ b.id }}" class="btn btn-outline-info">Inspect Tree</a>
+                                        <form action="/admin/banks/{{ b.id }}/toggle-active" method="POST" class="d-inline">
+                                            {% if b.is_active %}
+                                                <input type="hidden" name="is_active" value="false">
+                                                <button type="submit" class="btn btn-outline-warning">Deactivate</button>
+                                            {% else %}
+                                                <input type="hidden" name="is_active" value="true">
+                                                <button type="submit" class="btn btn-outline-success">Activate</button>
+                                            {% endif %}
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-dark border-secondary p-4 text-center">
+                    <p class="mb-2 text-secondary">No question banks generated yet.</p>
+                    <p class="small text-muted mb-0">Use the curriculum generator on the right to build your first UKVI interview bank.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Generate Question Bank Form -->
+    <div class="col-lg-4" id="generateBankCard">
+        <div class="card p-4 shadow-sm h-100">
+            <h4 class="card-title mb-2">Generate Question Bank</h4>
+            <p class="small text-secondary mb-3">
+                Executes the LangGraph <code>question_generation_graph</code> to automatically formulate credibility questions from curriculum content.
+            </p>
+
+            <form action="/admin/banks/generate" method="POST">
+                <div class="mb-3">
+                    <label class="form-label">Bank Title / Program Name</label>
+                    <input type="text" name="title" class="form-control" placeholder="e.g. MSc Data Science - University of Hertfordshire" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Target Difficulty Tier</label>
+                    <select name="difficulty" class="form-select">
+                        <option value="Easy">Easy</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Curriculum / Syllabus Content</label>
+                    <textarea name="curriculum_text" class="form-control font-monospace small" rows="7" placeholder="Paste course overview, core modules, learning outcomes, career alignment, or university prospectus text here..." required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2">
+                    ⚡ Formulate Bank via Graph
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

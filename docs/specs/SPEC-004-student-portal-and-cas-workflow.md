@@ -21,7 +21,7 @@ To comply with **Constitution Article I, Section 3 (Stateless Ingestion)**, **Se
 1. **Self-Service Onboarding:** Students independently register and manage their accounts.
 2. **Standardized CAS Ingestion:** Academic, financial (UKVI 28-day maintenance funds rule), and sponsor details are captured and validated via Pydantic v2 schemas.
 3. **Institutional Boundary Enforcement:** Students select from Admin-approved UK universities; they are strictly prohibited from altering institutional parameters, course modules, or fee guidelines.
-4. **Encrypted BYOK Support:** Students can optionally supply personal OpenRouter, Groq, or Ollama keys, encrypted via the security vault.
+4. **Open Source 3-Model BYOK Setup:** Students can independently supply personal API keys for the 3 core AI models (Thinking LLM, STT, and TTS) to use the system completely free under the open-source model. If unconfigured, institution keys are used.
 5. **UKVI Credibility Scorecard:** Once completed, candidates view their official evaluation report, rubric achievements, and visa justification summaries.
 
 ---
@@ -45,10 +45,11 @@ sequenceDiagram
     Portal->>DB: Save StudentProfile
     Student->>Portal: 3. Select Target University from Admin List
     Portal->>DB: Link selected_university_id
-    opt Bring Your Own Key (BYOK)
-        Student->>Portal: 4. Submit Personal API Key (OpenRouter / Groq)
+    opt Bring Your Own Key (BYOK) - 3 Model Setup
+        Student->>Portal: 4. Submit Personal Keys (Thinking, STT, TTS)
         Portal->>Vault: Encrypt via Fernet/AES-256
-        Vault->>DB: Store in CredentialVault
+        Vault->>DB: Upsert in CredentialVault (user_id, category)
+        Note over Student,Portal: Free Open-Source Tier Activated (Zero Platform Fees)
     end
     Student->>Portal: 5. Click "Start Interview"
     Portal->>DB: Query get_user_assigned_questions(user_id)
@@ -128,9 +129,16 @@ class StudentBYOKSchema(BaseModel):
 3. **University Selector (`/student/university`):**
    - Dropdown of admin-approved universities displaying course name, campus, and tuition guideline.
    - Read-only preview of core modules and campus facilities.
-4. **BYOK Credential Settings (`/student/byok`):**
-   - Secure input form for personal OpenRouter/Groq API keys.
-   - Displays masked preview (`sk-...4x91`) if a key is already configured.
+4. **BYOK 3-Model Credential Settings (`/student/credentials` & `/student/dashboard`):**
+   - Interactive 3-card control panel for personal API keys:
+     - **Thinking Model:** OpenRouter, Google, OpenAI, DeepSeek, Ollama, Grok.
+     - **Speech-to-Text (STT):** Google Gemini STT, OpenAI Whisper, Deepgram, Groq.
+     - **Text-to-Speech (TTS):** Google Gemini TTS, OpenAI TTS, ElevenLabs, Cartesia.
+   - Dynamic real-time badge states:
+     - 🟢 `Your Key (Free)`: Student BYOK active; zero platform fees.
+     - 🔵 `Institution Key`: Using admin/institution key (prototype chargeable tier).
+     - ⚪ `System Default`: Using static server `.env` fallback.
+   - Endpoints: `POST /student/credentials` (save/upsert), `POST /student/credentials/delete` (revert to lower tier).
 5. **Interview Audio Room (`/student/interview/{session_id}`):**
    - LiveKit WebRTC client interface styled with local Bootstrap.
    - Live microphone indicator, real-time question prompt, and turn scorecard widgets driven by the WebRTC Data Channel.
@@ -152,6 +160,7 @@ class StudentBYOKSchema(BaseModel):
 - **AC-4.4 (Scorecard Transparency):** Completed evaluation reports are rendered cleanly with complete UKVI justification text.
 - **AC-4.5 (Local Bootstrap Performance):** Student portal views load instantly without external network requests to third-party CDNs.
 - **AC-4.6 (Single-Device Lockdown):** When a candidate logs in from a new device, any active session or ongoing interview on a previous device is immediately invalidated. Attempting to submit or query from the previous device returns HTTP 401 Unauthorized.
+- **AC-4.7 (3-Model Free BYOK Execution):** When a student supplies their own API key for Thinking, STT, or TTS, that specific engine must immediately execute using the candidate's personal credentials and mark the session as Free Mode.
 
 ---
 

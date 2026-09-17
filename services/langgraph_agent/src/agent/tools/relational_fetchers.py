@@ -7,9 +7,20 @@ from langchain_core.tools import tool
 API_SERVICE_URL = os.getenv("API_SERVICE_URL", "http://localhost:8000")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./interview.db")
 
+try:
+    from src.api.services import question_service as _qs
+    from src.api.services import vault_service as _vs
+    _HAS_DIRECT_SERVICES = True
+except (ImportError, ModuleNotFoundError):
+    _qs = None
+    _vs = None
+    _HAS_DIRECT_SERVICES = False
+
 
 def _get_db_session_if_available():
     """Attempts to create a local database session for direct ORM access."""
+    if not _HAS_DIRECT_SERVICES:
+        return None
     try:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
@@ -25,10 +36,9 @@ def _get_db_session_if_available():
 def fetch_topics(bank_id: str) -> list[dict[str, Any]]:
     """Fetches all topics belonging to a question bank in sequence."""
     db = _get_db_session_if_available()
-    if db:
+    if db and _qs:
         try:
-            from src.api.services.question_service import get_topics_for_bank
-            return get_topics_for_bank(db, bank_id)
+            return _qs.get_topics_for_bank(db, bank_id)
         except Exception:
             pass
         finally:
@@ -44,10 +54,9 @@ def fetch_topics(bank_id: str) -> list[dict[str, Any]]:
 def fetch_questions(topic_id: str) -> list[dict[str, Any]]:
     """Fetches all questions belonging to a specific topic in sequence."""
     db = _get_db_session_if_available()
-    if db:
+    if db and _qs:
         try:
-            from src.api.services.question_service import get_questions_for_topic
-            return get_questions_for_topic(db, topic_id)
+            return _qs.get_questions_for_topic(db, topic_id)
         except Exception:
             pass
         finally:
@@ -62,10 +71,9 @@ def fetch_questions(topic_id: str) -> list[dict[str, Any]]:
 def fetch_followups(question_id: str) -> list[dict[str, Any]]:
     """Fetches all follow-up probes for a question."""
     db = _get_db_session_if_available()
-    if db:
+    if db and _qs:
         try:
-            from src.api.services.question_service import get_followups_for_question
-            return get_followups_for_question(db, question_id)
+            return _qs.get_followups_for_question(db, question_id)
         except Exception:
             pass
         finally:
@@ -83,10 +91,9 @@ def get_user_assigned_questions(user_id: str) -> Optional[dict[str, Any]]:
     Returns None if no question set is assigned.
     """
     db = _get_db_session_if_available()
-    if db:
+    if db and _qs:
         try:
-            from src.api.services.question_service import get_assigned_bank_for_user
-            return get_assigned_bank_for_user(db, user_id)
+            return _qs.get_assigned_bank_for_user(db, user_id)
         except Exception:
             pass
         finally:
@@ -95,3 +102,33 @@ def get_user_assigned_questions(user_id: str) -> Optional[dict[str, Any]]:
     with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
         res = client.get(f"/api/students/{user_id}/assigned-questions")
         return res.json() if res.status_code == 200 else None
+
+
+@tool
+def fetch_user_model_config(user_id: str) -> dict[str, Any]:
+    """
+    Fetches the resolved 3-model configuration (Thinking, STT, TTS) for a candidate.
+    Resolves Tier 1 (Student BYOK) -> Tier 2 (Admin Default) -> Tier 3 (.env Fallback).
+    """
+    db = _get_db_session_if_available()
+    if db and _vs:
+        try:
+            return {
+                "thinking": _vs.resolve_model_config(db, "thinking", student_user_id=user_id),
+                "stt": _vs.resolve_model_config(db, "stt", student_user_id=user_id),
+                "tts": _vs.resolve_model_config(db, "tts", student_user_id=user_id),
+            }
+        except Exception:
+            pass
+        finally:
+            db.close()
+
+    try:
+        with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
+            res = client.get(f"/api/students/{user_id}/model-config")
+            if res.status_code == 200:
+                return res.json()
+    except Exception:
+        pass
+
+    return {}

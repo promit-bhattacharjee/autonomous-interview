@@ -16,11 +16,16 @@ src_path = str(Path(__file__).resolve().parent.parent / "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
+import os
 import unittest
 from interview.service import InterviewSession
 from interview.state import QuestionState, TopicState
 
 
+@unittest.skipUnless(
+    bool(os.getenv("GOOGLE_API_KEY")),
+    "Requires live GOOGLE_API_KEY in environment (.env is sanitized per zero-key policy)",
+)
 class TestFullInterviewAndFinalEvaluation(unittest.TestCase):
     def test_e2e_interview_with_mock_flow(self):
         """
