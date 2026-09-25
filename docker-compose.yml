@@ -2,7 +2,7 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     container_name: interview_livekit_server
-    command: --config /etc/livekit.yaml --node-ip ${NODE_IP:-127.0.0.1}
+    command: --config /etc/livekit.yaml
     restart: unless-stopped
     ports:
       - "7880:7880"         # HTTP API and WebSocket signaling
@@ -12,7 +12,6 @@ services:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
       - "LIVEKIT_KEYS=${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
-      - "NODE_IP=${NODE_IP:-127.0.0.1}"
     networks:
       - interview_net
 

@@ -32,18 +32,9 @@ The repository runs 3 synchronized services managed as a single **Docker Compose
 Navigate to the **Environment** tab of the Compose service in Dokploy, and paste the values (referencing [`.env.dokploy.example`](file:///c:/Users/promi/OneDrive/Desktop/interviewv2/.env.dokploy.example)):
 
 ```env
-# VPS Public IPv4 (REQUIRED for LiveKit WebRTC audio routing)
-NODE_IP=YOUR_VPS_PUBLIC_IP
-
-# Candidate Browser WebRTC Signaling URL
-# If using direct IP:
-PUBLIC_LIVEKIT_URL=ws://YOUR_VPS_PUBLIC_IP:7880
-# If using domain with SSL:
-# PUBLIC_LIVEKIT_URL=wss://livekit.yourdomain.com
-
-# LiveKit Keys
+# LiveKit Server & Worker Authentication Keys
 LIVEKIT_API_KEY=devkey
-LIVEKIT_API_SECRET=secret
+LIVEKIT_API_SECRET=production_livekit_secret_key_ukvi_2026_x91
 
 # Security & Encryption
 JWT_SECRET=production-ukvi-jwt-secret-key-32-chars-minimum-entropy
