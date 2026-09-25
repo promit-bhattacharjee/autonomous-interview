@@ -366,9 +366,13 @@
                     const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
                     if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "livekit") {
                         if (!isLocal) {
-                            const parts = window.location.hostname.split('.');
-                            const baseDomain = parts.length > 2 ? parts.slice(1).join('.') : window.location.hostname;
-                            parsed.hostname = "livekit." + baseDomain;
+                            if (window.location.hostname.startsWith("interview.")) {
+                                parsed.hostname = window.location.hostname.replace(/^interview\./, "interviewaudio.");
+                            } else {
+                                const parts = window.location.hostname.split('.');
+                                const baseDomain = parts.length > 2 ? parts.slice(1).join('.') : window.location.hostname;
+                                parsed.hostname = "interviewaudio." + baseDomain;
+                            }
                             parsed.port = "";
                         } else {
                             parsed.hostname = window.location.hostname;
