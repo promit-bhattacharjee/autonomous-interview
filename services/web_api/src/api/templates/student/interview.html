@@ -460,7 +460,8 @@
             startBtn.innerText = "🎙️ Start Voice Interview";
             promptEl.innerText = 'Click "Start Voice Interview" below when you are ready.';
             currentState = STATES.STANDBY;
-            alert("Could not establish WebRTC media connection. Please verify LiveKit server is running on port 7880.");
+            const errMsg = (error && (error.message || error.toString())) || "Unknown error";
+            alert(`Could not establish WebRTC media connection to:\n${livekitUrl}\n\nReason: ${errMsg}\n\nPlease check browser console (F12) for network diagnostics.`);
         }
     }
 

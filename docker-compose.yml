@@ -12,6 +12,7 @@ services:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
       - "LIVEKIT_KEYS=${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secret}"
+      - "LIVEKIT_RTC_NODE_IP=${NODE_IP:-}"
     networks:
       - interview_net
 
