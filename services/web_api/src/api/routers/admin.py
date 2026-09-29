@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -172,33 +173,50 @@ def trigger_generation_graph(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    # Generates a starter segment set and saves bank
-    starter_topics = [
-        {
-            "name": "General Credibility & Motivation",
-            "description": "Why the UK, university choice, and career orientation",
-            "questions": [
-                {
-                    "question_text": f"Explain why you decided to pursue your studies under this specific syllabus: {title}?",
-                    "expected_time_to_ans": 45,
-                    "expected_answer_keywords": ["curriculum", "accreditation", "career"],
-                    "followups": [
-                        {
-                            "followup_text": "How will the modules covered contribute directly to your career plans upon return?",
-                            "expected_time_to_ans": 30,
-                            "expected_answer_keywords": ["specialization", "skills", "employment"],
-                        }
-                    ],
-                }
-            ],
-        }
-    ]
+    topics_payload = None
+    try:
+        try:
+            from src.agent.graphs.question_gen import synthesize_topics_node
+        except (ImportError, ModuleNotFoundError):
+            from services.langgraph_agent.src.agent.graphs.question_gen import synthesize_topics_node
+
+        gen_result = synthesize_topics_node({
+            "title": title,
+            "difficulty": difficulty,
+            "curriculum_text": curriculum_text,
+        })
+        topics_payload = gen_result.get("synthesized_topics")
+    except Exception:
+        pass
+
+    if not topics_payload:
+        topics_payload = [
+            {
+                "name": "General Credibility & Motivation",
+                "description": "Why the UK, university choice, and career orientation",
+                "questions": [
+                    {
+                        "question_text": f"Explain why you decided to pursue your studies under this specific syllabus: {title}?",
+                        "expected_time_to_ans": 45,
+                        "expected_answer_keywords": ["curriculum", "accreditation", "career"],
+                        "followups": [
+                            {
+                                "followup_text": "How will the modules covered contribute directly to your career plans upon return?",
+                                "expected_time_to_ans": 30,
+                                "expected_answer_keywords": ["specialization", "skills", "employment"],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
     question_service.create_question_bank_from_payload(
         db=db,
         title=title,
         difficulty=difficulty,
         university_id=None,
-        topics_payload=starter_topics,
+        topics_payload=topics_payload,
         curriculum_source=curriculum_text,
     )
     referer = request.headers.get("referer", "")
@@ -322,5 +340,37 @@ def list_evaluations(
         context={
             "user": admin_user,
             "sessions": sessions,
+        },
+    )
+
+
+@router.get("/evaluations/{session_id}", response_class=HTMLResponse)
+def view_evaluation_detail(
+    session_id: str,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from src.api.db.models import InterviewSessionRecord
+    session_record = db.query(InterviewSessionRecord).filter(InterviewSessionRecord.id == session_id).first()
+    if not session_record:
+        return RedirectResponse(url="/admin/evaluations", status_code=status.HTTP_303_SEE_OTHER)
+
+    try:
+        report = json.loads(session_record.report_json) if session_record.report_json else None
+    except Exception:
+        report = None
+    turns = session_record.turn_evaluations if session_record else []
+    profile = session_record.student
+
+    return get_templates().TemplateResponse(
+        request=request,
+        name="admin/evaluation_detail.html",
+        context={
+            "user": admin_user,
+            "session": session_record,
+            "profile": profile,
+            "report": report,
+            "turns": turns,
         },
     )

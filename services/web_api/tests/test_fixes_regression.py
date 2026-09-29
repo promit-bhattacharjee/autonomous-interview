@@ -143,3 +143,107 @@ class TestFixesRegression:
         assert session.status == "discarded"
         parsed = json.loads(session.report_json)
         assert parsed["discard_reason"] == tricky_reason
+
+    def test_admin_evaluation_detail_route(self, db_session):
+        """Validates that GET /admin/evaluations/{session_id} renders candidate scorecard."""
+        from fastapi.testclient import TestClient
+        from src.api.main import app
+        from src.api.db.session import get_db
+        from src.api.db.models import InterviewSessionRecord, StudentProfile, TurnEvaluationRecord
+        from src.api.security.auth import create_access_token
+
+        def override_db():
+            yield db_session
+
+        prior_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app)
+
+            admin = User(username="admin_test", email="adm@test.com", hashed_password="pw", role=UserRole.ADMIN, active_device_id="dev-1")
+            student = User(username="stud_eval", email="eval@test.com", hashed_password="pw", role=UserRole.STUDENT, active_device_id="dev-2")
+            db_session.add_all([admin, student])
+            db_session.commit()
+
+            sp = StudentProfile(user_id=student.id, full_name="Amina Begum", academic_background="BSc CS")
+            bank = QuestionBank(title="Hertfordshire MSc AI")
+            db_session.add_all([sp, bank])
+            db_session.commit()
+
+            sess = InterviewSessionRecord(
+                student_id=sp.id,
+                bank_id=bank.id,
+                room_name="room-stud_eval",
+                status="completed",
+                overall_score=85.5,
+                ukvi_recommendation="Genuine",
+                report_json=json.dumps({"recommendation": "Candidate demonstrated strong genuine intent."}),
+            )
+            db_session.add(sess)
+            db_session.commit()
+
+            turn = TurnEvaluationRecord(
+                session_id=sess.id,
+                turn_type="question",
+                reference_id="q1",
+                spoken_prompt="Why Hertfordshire?",
+                candidate_transcript="Because of the specialized curriculum modules.",
+                score=90.0,
+            )
+            db_session.add(turn)
+            db_session.commit()
+
+            admin_token = create_access_token(user_id=admin.id, role="admin", device_id="dev-1")
+            client.cookies.set("access_token", admin_token)
+
+            res = client.get(f"/admin/evaluations/{sess.id}")
+            assert res.status_code == 200
+            assert "Amina Begum" in res.text
+            assert "85.5%" in res.text
+            assert "Why Hertfordshire?" in res.text
+            assert "Because of the specialized curriculum modules." in res.text
+        finally:
+            if prior_override is not None:
+                app.dependency_overrides[get_db] = prior_override
+            else:
+                app.dependency_overrides.pop(get_db, None)
+
+    def test_admin_bank_generate_synthesizes_topics(self, db_session):
+        """Validates that POST /admin/banks/generate runs synthesis graph to formulate 3 modules."""
+        from fastapi.testclient import TestClient
+        from src.api.main import app
+        from src.api.db.session import get_db
+        from src.api.security.auth import create_access_token
+
+        def override_db():
+            yield db_session
+
+        prior_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app)
+
+            admin = User(username="admin_gen", email="adm_gen@test.com", hashed_password="pw", role=UserRole.ADMIN, active_device_id="dev-gen")
+            db_session.add(admin)
+            db_session.commit()
+
+            admin_token = create_access_token(user_id=admin.id, role="admin", device_id="dev-gen")
+            client.cookies.set("access_token", admin_token)
+
+            res = client.post("/admin/banks/generate", data={
+                "title": "MSc Robotics",
+                "difficulty": "Hard",
+                "curriculum_text": "Autonomous systems and mobile robotics.",
+            }, follow_redirects=False)
+
+            assert res.status_code == 303
+            created_bank = db_session.query(QuestionBank).filter(QuestionBank.title == "MSc Robotics").first()
+            assert created_bank is not None
+            assert len(created_bank.topics) == 3
+            # Hard tier should set 60s limit
+            assert created_bank.topics[0].questions[0].expected_time_to_ans == 60
+        finally:
+            if prior_override is not None:
+                app.dependency_overrides[get_db] = prior_override
+            else:
+                app.dependency_overrides.pop(get_db, None)

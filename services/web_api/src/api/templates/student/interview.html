@@ -248,6 +248,7 @@
     let animationId = null;
     let recognition = null;
     let currentCandidateTranscript = "";
+    let currentInterimTranscript = "";
     let turnTimerInterval = null;
     let vadCheckInterval = null;
     let remainingSeconds = 45;
@@ -635,6 +636,7 @@
         sttBadge.className = "badge bg-success";
 
         currentCandidateTranscript = "";
+        currentInterimTranscript = "";
         const transcriptEl = document.getElementById("candidateLiveTranscript");
         transcriptEl.innerText = "Listening for your response... Speak clearly.";
         transcriptEl.className = "p-3 rounded bg-dark border border-info text-light font-monospace small";
@@ -724,6 +726,7 @@
                 if (finalTranscript) {
                     currentCandidateTranscript += finalTranscript;
                 }
+                currentInterimTranscript = interimTranscript;
                 const display = (currentCandidateTranscript + " " + interimTranscript).trim();
                 const transcriptEl = document.getElementById("candidateLiveTranscript");
                 if (display) {
@@ -759,7 +762,7 @@
     async function submitCandidateTurn(isTimeout = false) {
         if (currentState !== STATES.CANDIDATE_TURN) return;
 
-        let answerText = (currentCandidateTranscript || "").trim();
+        let answerText = ((currentCandidateTranscript + " " + currentInterimTranscript) || "").trim();
 
         if (!answerText) {
             if (isTimeout) {
@@ -943,7 +946,7 @@
                 lastAudioEnergyTimestamp = currTime;
             }
 
-            const currentText = (currentCandidateTranscript || "").trim();
+            const currentText = ((currentCandidateTranscript + " " + currentInterimTranscript) || "").trim();
             const semantic = analyzeSemanticTurn(currentText);
             const silenceMs = currTime - Math.max(lastSpeechTimestamp, lastAudioEnergyTimestamp);
             const isAcousticallyQuiet = audioLevel < 12;

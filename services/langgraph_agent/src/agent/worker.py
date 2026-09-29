@@ -253,7 +253,7 @@ async def entrypoint(ctx: JobContext):
                 })
 
                 # Persist to database via HTTP
-                api_url = os.getenv("API_SERVICE_URL", "http://web_api:8000")
+                api_url = os.getenv("API_SERVICE_URL", "http://localhost:8000")
                 try:
                     import httpx
                     async with httpx.AsyncClient(base_url=api_url, timeout=10.0) as client:

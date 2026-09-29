@@ -35,7 +35,7 @@
                     <tbody>
                         {% for s in sessions %}
                             <tr>
-                                <td><code>{{ s.id[:8] }}...</code></td>
+                                <td><a href="/admin/evaluations/{{ s.id }}" class="text-info text-decoration-none"><code>{{ s.id[:8] }}...</code> 🔍</a></td>
                                 <td>
                                     <strong>{{ s.student.full_name if s.student else 'Unknown' }}</strong>
                                     <div class="small text-secondary">{{ s.student.user.username if s.student and s.student.user else '' }}</div>
