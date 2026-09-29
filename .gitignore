@@ -54,5 +54,6 @@ htmlcov/
 
 # Logs & temporary files
 *.log
+cookies.txt
 scratch/
 tmp/
