@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 from typing import Optional
@@ -9,6 +10,7 @@ router = APIRouter(tags=["Text to Speech"])
 
 # In-memory audio cache: MD5(voice + text) -> bytes
 _TTS_CACHE: dict[str, bytes] = {}
+_TTS_LOCK = asyncio.Lock()
 _MAX_CACHE_ENTRIES = 200
 
 # Default British English neural voice for UKVI Credibility examiner
@@ -31,15 +33,16 @@ async def generate_speech_audio(
     target_voice = (voice or DEFAULT_UK_VOICE).strip()
     cache_key = hashlib.md5(f"{target_voice}::{clean_text}".encode("utf-8")).hexdigest()
 
-    if cache_key in _TTS_CACHE:
-        return Response(
-            content=_TTS_CACHE[cache_key],
-            media_type="audio/mpeg",
-            headers={
-                "Cache-Control": "public, max-age=86400",
-                "X-TTS-Cache": "HIT",
-            },
-        )
+    async with _TTS_LOCK:
+        if cache_key in _TTS_CACHE:
+            return Response(
+                content=_TTS_CACHE[cache_key],
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "X-TTS-Cache": "HIT",
+                },
+            )
 
     try:
         import edge_tts
@@ -55,12 +58,12 @@ async def generate_speech_audio(
 
         audio_bytes = bytes(audio_buffer)
 
-        # Cache management
-        if len(_TTS_CACHE) >= _MAX_CACHE_ENTRIES:
-            # Drop earliest inserted key
-            first_key = next(iter(_TTS_CACHE))
-            _TTS_CACHE.pop(first_key, None)
-        _TTS_CACHE[cache_key] = audio_bytes
+        # Cache management under lock
+        async with _TTS_LOCK:
+            if len(_TTS_CACHE) >= _MAX_CACHE_ENTRIES:
+                first_key = next(iter(_TTS_CACHE))
+                _TTS_CACHE.pop(first_key, None)
+            _TTS_CACHE[cache_key] = audio_bytes
 
         return Response(
             content=audio_bytes,

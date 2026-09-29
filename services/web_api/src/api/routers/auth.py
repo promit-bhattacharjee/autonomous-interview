@@ -130,7 +130,35 @@ def register_submit(
     device_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    existing = db.query(User).filter((User.username == username) | (User.email == email)).first()
+    clean_username = username.strip()
+    clean_email = email.strip().lower()
+    clean_full_name = full_name.strip()
+
+    if len(clean_username) < 3:
+        return get_templates().TemplateResponse(
+            request=request,
+            name="auth/register.html",
+            context={"error": "Username must be at least 3 characters long."},
+            status_code=400,
+        )
+
+    if "@" not in clean_email or "." not in clean_email:
+        return get_templates().TemplateResponse(
+            request=request,
+            name="auth/register.html",
+            context={"error": "Please provide a valid email address."},
+            status_code=400,
+        )
+
+    if len(password) < 6:
+        return get_templates().TemplateResponse(
+            request=request,
+            name="auth/register.html",
+            context={"error": "Password must be at least 6 characters long."},
+            status_code=400,
+        )
+
+    existing = db.query(User).filter((User.username == clean_username) | (User.email == clean_email)).first()
     if existing:
         return get_templates().TemplateResponse(
             request=request,
@@ -141,8 +169,8 @@ def register_submit(
 
     client_device_id = device_id.strip() or "dev-unknown"
     user = User(
-        username=username.strip(),
-        email=email.strip().lower(),
+        username=clean_username,
+        email=clean_email,
         hashed_password=hash_password(password),
         role=UserRole.STUDENT,
         active_device_id=client_device_id,
@@ -152,7 +180,7 @@ def register_submit(
 
     profile = StudentProfile(
         user_id=user.id,
-        full_name=full_name.strip(),
+        full_name=clean_full_name or clean_username,
     )
     db.add(profile)
     db.commit()
@@ -169,7 +197,28 @@ def api_register_submit(
     db: Session = Depends(get_db),
 ):
     """Programmatic JSON registration endpoint returning signed JWT access token."""
-    existing = db.query(User).filter((User.username == payload.username) | (User.email == payload.email)).first()
+    clean_username = payload.username.strip()
+    clean_email = payload.email.strip().lower()
+
+    if len(clean_username) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username must be at least 3 characters long.",
+        )
+
+    if "@" not in clean_email or "." not in clean_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide a valid email address.",
+        )
+
+    if len(payload.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long.",
+        )
+
+    existing = db.query(User).filter((User.username == clean_username) | (User.email == clean_email)).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -178,8 +227,8 @@ def api_register_submit(
 
     client_device_id = (payload.device_id or "api-client").strip()
     user = User(
-        username=payload.username.strip(),
-        email=payload.email.strip().lower(),
+        username=clean_username,
+        email=clean_email,
         hashed_password=hash_password(payload.password),
         role=UserRole.STUDENT,
         active_device_id=client_device_id,

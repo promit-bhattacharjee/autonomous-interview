@@ -59,11 +59,6 @@ def get_thinking_llm(
             **kwargs,
         )
 
-    if resolved_api_key and "OPENAI_API_KEY" not in os.environ:
-        os.environ["OPENAI_API_KEY"] = resolved_api_key
-    if resolved_base_url and "OPENAI_BASE_URL" not in os.environ:
-        os.environ["OPENAI_BASE_URL"] = resolved_base_url
-
     return ChatOpenAI(
         model=resolved_model,
         api_key=resolved_api_key,

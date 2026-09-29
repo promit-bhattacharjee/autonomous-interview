@@ -169,9 +169,8 @@ def save_model_credential(
             detail="Candidate API key capture is disabled. Model engines are configured strictly by institution administrators.",
         )
 
-    clean_key = api_key.strip()
-    encrypted = encrypt_api_key(clean_key)
-    preview = mask_api_key(clean_key)
+    clean_key = (api_key or "").strip()
+    is_masked_preview = clean_key.startswith("...") or "..." in clean_key or clean_key.endswith("...")
 
     query = db.query(CredentialVault).filter(CredentialVault.category == category)
     if is_admin:
@@ -187,9 +186,13 @@ def save_model_credential(
         entry.model_name = (model_name or "").strip() or None
         entry.base_url = (base_url or "").strip() or None
         entry.voice = (voice or "").strip() or None
-        entry.encrypted_api_key = encrypted
-        entry.key_preview = preview
+        # Only update key if user actually submitted a new real key (not empty, not preview)
+        if clean_key and clean_key != entry.key_preview and not is_masked_preview:
+            entry.encrypted_api_key = encrypt_api_key(clean_key)
+            entry.key_preview = mask_api_key(clean_key)
     else:
+        encrypted = encrypt_api_key(clean_key)
+        preview = mask_api_key(clean_key)
         entry = CredentialVault(
             user_id=user_id if not is_admin else None,
             category=category,

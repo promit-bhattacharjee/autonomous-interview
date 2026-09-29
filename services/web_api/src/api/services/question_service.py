@@ -41,7 +41,7 @@ def get_questions_for_topic(db: Session, topic_id: str) -> list[dict[str, Any]]:
             "question_id": q.id,
             "question_text": q.question_text,
             "expected_time_to_ans": q.expected_time_to_ans,
-            "expected_answer_keywords": json.loads(q.expected_answer_keywords_json),
+            "expected_answer_keywords": json.loads(q.expected_answer_keywords_json or "[]"),
             "order": q.order,
         }
         for q in questions
@@ -61,7 +61,7 @@ def get_followups_for_question(db: Session, question_id: str) -> list[dict[str, 
             "followup_id": f.id,
             "followup_text": f.followup_text,
             "expected_time_to_ans": f.expected_time_to_ans,
-            "expected_answer_keywords": json.loads(f.expected_answer_keywords_json),
+            "expected_answer_keywords": json.loads(f.expected_answer_keywords_json or "[]"),
             "order": f.order,
         }
         for f in followups

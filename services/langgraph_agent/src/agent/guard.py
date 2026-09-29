@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -39,7 +40,7 @@ def abort_and_discard_session(
                 # Purge partial turn evaluation records
                 db.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == session.id).delete()
                 session.status = "discarded"
-                session.report_json = f'{{"discard_reason": "{reason}"}}'
+                session.report_json = json.dumps({"discard_reason": reason})
                 db.commit()
                 return {"status": "discarded", "session_id": session.id, "reason": reason}
         except Exception as exc:

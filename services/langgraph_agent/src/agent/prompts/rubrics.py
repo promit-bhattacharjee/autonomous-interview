@@ -1,3 +1,4 @@
+import re
 from typing import Tuple
 
 
@@ -10,8 +11,8 @@ def evaluate_response_keywords(transcript: str, expected_keywords: list[str]) ->
         return 100.0, [], []
 
     text = transcript.lower()
-    hits = [kw for kw in expected_keywords if kw.lower() in text]
-    missed = [kw for kw in expected_keywords if kw.lower() not in text]
+    hits = [kw for kw in expected_keywords if re.search(rf"\b{re.escape(kw.lower())}\b", text)]
+    missed = [kw for kw in expected_keywords if not re.search(rf"\b{re.escape(kw.lower())}\b", text)]
 
     score = round((len(hits) / len(expected_keywords)) * 100.0, 1)
     return score, hits, missed

@@ -49,7 +49,7 @@ app.add_middleware(JWTRoleMiddleware)
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     accept = request.headers.get("accept", "")
-    is_html_request = "text/html" in accept and not request.url.path.startswith(("/relational", "/auth/api", "/student/api"))
+    is_html_request = "text/html" in accept and not request.url.path.startswith(("/api", "/auth/api", "/student/api"))
 
     if exc.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN) and is_html_request:
         encoded_detail = quote(str(exc.detail))

@@ -366,14 +366,18 @@
                     const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
                     if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "livekit") {
                         if (!isLocal) {
-                            if (window.location.hostname.startsWith("interview.")) {
+                            const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+                            if (isIp) {
+                                parsed.hostname = window.location.hostname;
+                            } else if (window.location.hostname.startsWith("interview.")) {
                                 parsed.hostname = window.location.hostname.replace(/^interview\./, "interviewaudio.");
+                                parsed.port = "";
                             } else {
                                 const parts = window.location.hostname.split('.');
                                 const baseDomain = parts.length > 2 ? parts.slice(1).join('.') : window.location.hostname;
                                 parsed.hostname = "interviewaudio." + baseDomain;
+                                parsed.port = "";
                             }
-                            parsed.port = "";
                         } else {
                             parsed.hostname = window.location.hostname;
                         }
@@ -755,12 +759,7 @@
     async function submitCandidateTurn(isTimeout = false) {
         if (currentState !== STATES.CANDIDATE_TURN) return;
 
-        const transcriptEl = document.getElementById("candidateLiveTranscript");
-        let answerText = (currentCandidateTranscript || transcriptEl.innerText || "").trim();
-
-        if (answerText === "Listening for your response... Speak clearly." || answerText.startsWith("Listening...")) {
-            answerText = "";
-        }
+        let answerText = (currentCandidateTranscript || "").trim();
 
         if (!answerText) {
             if (isTimeout) {

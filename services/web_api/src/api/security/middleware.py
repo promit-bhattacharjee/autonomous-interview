@@ -57,7 +57,7 @@ class JWTRoleMiddleware(BaseHTTPMiddleware):
             request.state.device_id = None
 
         accept = request.headers.get("accept", "")
-        is_html_req = "text/html" in accept and not path.startswith(("/auth/api", "/student/api", "/relational"))
+        is_html_req = "text/html" in accept and not path.startswith(("/api", "/auth/api", "/student/api"))
 
         # 1. Root / routing
         if path == "/":

@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 from langgraph.graph import END, StateGraph
 from src.agent.keyword_ledger import RelationalKeywordLedger
@@ -13,7 +14,7 @@ def evaluate_answer_node(state: InterviewExecutionState) -> dict[str, Any]:
     active_q_id = state.get("active_question_id") or f"q-{state.get('current_topic_index', 0)}-{state.get('current_question_index', 0)}"
 
     text_lower = transcript.lower()
-    new_hits = [kw for kw in total_kws if kw.lower() in text_lower]
+    new_hits = [kw for kw in total_kws if re.search(rf"\b{re.escape(kw.lower())}\b", text_lower)]
 
     # Relational Deduplicated Keyword Ledger:
     # When a keyword matches, it is appended to the question's ledger.

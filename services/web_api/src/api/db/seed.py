@@ -49,9 +49,7 @@ def seed_database(db: Session) -> dict[str, str]:
         db.add(admin_user)
         logger.info("Created admin user: admin / admin")
     else:
-        admin_user.hashed_password = hash_password("admin")
-        admin_user.role = UserRole.ADMIN
-        logger.info("Updated existing admin user password to 'admin'")
+        logger.info("Preserved existing admin user account")
 
     # 2. Seed Student User (student / student)
     student_user = db.query(User).filter(User.username == "student").first()
@@ -66,9 +64,7 @@ def seed_database(db: Session) -> dict[str, str]:
         db.add(student_user)
         logger.info("Created student user: student / student")
     else:
-        student_user.hashed_password = hash_password("student")
-        student_user.role = UserRole.STUDENT
-        logger.info("Updated existing student user password to 'student'")
+        logger.info("Preserved existing student user account")
 
     db.commit()
     db.refresh(admin_user)
@@ -150,8 +146,14 @@ def seed_database(db: Session) -> dict[str, str]:
         db.commit()
         db.refresh(bank)
     else:
-        # Clear existing topics for a clean replacement
-        db.query(TopicRecord).filter(TopicRecord.bank_id == bank.id).delete()
+        # Clear existing topics and nested children for clean replacement
+        topic_ids = [t.id for t in db.query(TopicRecord).filter(TopicRecord.bank_id == bank.id).all()]
+        if topic_ids:
+            q_ids = [q.id for q in db.query(QuestionRecord).filter(QuestionRecord.topic_id.in_(topic_ids)).all()]
+            if q_ids:
+                db.query(FollowupRecord).filter(FollowupRecord.question_id.in_(q_ids)).delete(synchronize_session=False)
+            db.query(QuestionRecord).filter(QuestionRecord.topic_id.in_(topic_ids)).delete(synchronize_session=False)
+            db.query(TopicRecord).filter(TopicRecord.bank_id == bank.id).delete(synchronize_session=False)
         db.commit()
 
     topics_data = [

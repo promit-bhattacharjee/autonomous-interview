@@ -17,17 +17,23 @@ except (ImportError, ModuleNotFoundError):
     _HAS_DIRECT_SERVICES = False
 
 
+_ENGINE = None
+_SESSION_MAKER = None
+
+
 def _get_db_session_if_available():
-    """Attempts to create a local database session for direct ORM access."""
+    """Attempts to create a local database session for direct ORM access using a singleton engine."""
+    global _ENGINE, _SESSION_MAKER
     if not _HAS_DIRECT_SERVICES:
         return None
     try:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-        engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        return SessionLocal()
+        if _ENGINE is None:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+            _ENGINE = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
+            _SESSION_MAKER = sessionmaker(autocommit=False, autoflush=False, bind=_ENGINE)
+        return _SESSION_MAKER()
     except Exception:
         return None
 
@@ -45,9 +51,12 @@ def fetch_topics(bank_id: str) -> list[dict[str, Any]]:
             db.close()
 
     # Fallback to HTTP REST endpoint
-    with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
-        res = client.get(f"/api/banks/{bank_id}/topics")
-        return res.json() if res.status_code == 200 else []
+    try:
+        with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
+            res = client.get(f"/api/banks/{bank_id}/topics")
+            return res.json() if res.status_code == 200 else []
+    except Exception:
+        return []
 
 
 @tool
@@ -62,9 +71,12 @@ def fetch_questions(topic_id: str) -> list[dict[str, Any]]:
         finally:
             db.close()
 
-    with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
-        res = client.get(f"/api/topics/{topic_id}/questions")
-        return res.json() if res.status_code == 200 else []
+    try:
+        with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
+            res = client.get(f"/api/topics/{topic_id}/questions")
+            return res.json() if res.status_code == 200 else []
+    except Exception:
+        return []
 
 
 @tool
@@ -79,9 +91,12 @@ def fetch_followups(question_id: str) -> list[dict[str, Any]]:
         finally:
             db.close()
 
-    with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
-        res = client.get(f"/api/questions/{question_id}/followups")
-        return res.json() if res.status_code == 200 else []
+    try:
+        with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
+            res = client.get(f"/api/questions/{question_id}/followups")
+            return res.json() if res.status_code == 200 else []
+    except Exception:
+        return []
 
 
 @tool
@@ -99,9 +114,12 @@ def get_user_assigned_questions(user_id: str) -> Optional[dict[str, Any]]:
         finally:
             db.close()
 
-    with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
-        res = client.get(f"/api/students/{user_id}/assigned-questions")
-        return res.json() if res.status_code == 200 else None
+    try:
+        with httpx.Client(base_url=API_SERVICE_URL, timeout=10.0) as client:
+            res = client.get(f"/api/students/{user_id}/assigned-questions")
+            return res.json() if res.status_code == 200 else None
+    except Exception:
+        return None
 
 
 @tool

@@ -83,7 +83,7 @@
                                             </div>
                                             <div class="col-md-9">
                                                 <label class="form-label small">Expected Keywords (comma-separated)</label>
-                                                <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ q.expected_answer_keywords_json|replace('[\"', '')|replace('\"]', '')|replace('\"', '') }}">
+                                                <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ q.expected_answer_keywords_json|replace('[', '')|replace(']', '')|replace('\"', '')|trim }}">
                                             </div>
                                         </div>
                                         <button type="submit" class="btn btn-primary btn-sm">Save Question</button>
@@ -117,7 +117,7 @@
                                                         <input type="number" name="expected_time_to_ans" class="form-control form-control-sm" value="{{ f.expected_time_to_ans }}" required>
                                                     </div>
                                                     <div class="col-md-9">
-                                                        <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ f.expected_answer_keywords_json|replace('[\"', '')|replace('\"]', '')|replace('\"', '') }}">
+                                                        <input type="text" name="keywords_raw" class="form-control form-control-sm" value="{{ f.expected_answer_keywords_json|replace('[', '')|replace(']', '')|replace('\"', '')|trim }}">
                                                     </div>
                                                 </div>
                                                 <button type="submit" class="btn btn-primary btn-sm">Save Follow-up</button>

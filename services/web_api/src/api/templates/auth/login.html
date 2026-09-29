@@ -37,7 +37,12 @@
 {% block extra_scripts %}
 <script>
     document.getElementById("loginForm").addEventListener("submit", function() {
-        document.getElementById("device_id").value = localStorage.getItem("ukvi_device_id") || ("dev-" + crypto.randomUUID());
+        let devId = localStorage.getItem("ukvi_device_id");
+        if (!devId) {
+            devId = "dev-" + crypto.randomUUID();
+            localStorage.setItem("ukvi_device_id", devId);
+        }
+        document.getElementById("device_id").value = devId;
     });
 </script>
 {% endblock %}
