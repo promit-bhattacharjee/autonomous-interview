@@ -1,3 +1,4 @@
+import json
 from typing import List
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from interview.helper import (
@@ -21,6 +22,8 @@ from interview.state import (
     FinalEvaluation,
     InterviewState,
     QuestionPlanModel,
+    StudentData,
+    UniversityData,
 )
 from interview.tools.question_helpers import (
     advance_turn,
@@ -42,10 +45,21 @@ def generate_questions_node(state: InterviewState) -> dict:
     student_data = state.get("student_data")
     university_data = state.get("university_data")
 
-    target_univ = student_data.target_university if student_data else ""
-    target_course = student_data.target_course if student_data else ""
-    tuition_fee = student_data.tuition_fee_gbp if student_data else 0.0
-    living_cost = student_data.living_cost_gbp if student_data else 0.0
+    if isinstance(student_data, dict):
+        try:
+            student_data = StudentData(**student_data)
+        except Exception:
+            pass
+    if isinstance(university_data, dict):
+        try:
+            university_data = UniversityData(**university_data)
+        except Exception:
+            pass
+
+    target_univ = student_data.target_university if hasattr(student_data, "target_university") else (student_data.get("target_university", "") if isinstance(student_data, dict) else "")
+    target_course = student_data.target_course if hasattr(student_data, "target_course") else (student_data.get("target_course", "") if isinstance(student_data, dict) else "")
+    tuition_fee = student_data.tuition_fee_gbp if hasattr(student_data, "tuition_fee_gbp") else (student_data.get("tuition_fee_gbp", 0.0) if isinstance(student_data, dict) else 0.0)
+    living_cost = student_data.living_cost_gbp if hasattr(student_data, "living_cost_gbp") else (student_data.get("living_cost_gbp", 0.0) if isinstance(student_data, dict) else 0.0)
 
     expected_kw = [
         str(target_univ),
@@ -55,15 +69,19 @@ def generate_questions_node(state: InterviewState) -> dict:
         "28-day rule",
         "home country return",
     ]
-    if university_data and university_data.core_modules:
-        for mod in university_data.core_modules[:2]:
+    core_modules = university_data.core_modules if hasattr(university_data, "core_modules") else (university_data.get("core_modules", []) if isinstance(university_data, dict) else [])
+    if core_modules:
+        for mod in core_modules[:2]:
             mod_title = mod.get("title") or mod.get("module_name") if isinstance(mod, dict) else getattr(mod, "title", getattr(mod, "module_name", None))
             if mod_title:
                 expected_kw.append(mod_title)
 
+    student_json = student_data.model_dump_json(indent=2) if hasattr(student_data, "model_dump_json") else json.dumps(student_data or {}, indent=2)
+    univ_json = university_data.model_dump_json(indent=2) if hasattr(university_data, "model_dump_json") else json.dumps(university_data or {}, indent=2)
+
     system_content = QUESTION_GENERATION_FROM_STATE_PROMPT.format(
-        student_info=student_data.model_dump_json(indent=2) if student_data else "{}",
-        university_info=university_data.model_dump_json(indent=2) if university_data else "{}",
+        student_info=student_json,
+        university_info=univ_json,
     )
 
     human_content = QUESTION_GENERATION_HUMAN_PROMPT.format(
@@ -277,9 +295,23 @@ def generate_final_evaluation_node(state: InterviewState) -> dict:
         )
     eval_summary = "\n".join(eval_lines) if eval_lines else "No individual evaluations recorded."
 
+    if isinstance(student_data, dict):
+        try:
+            student_data = StudentData(**student_data)
+        except Exception:
+            pass
+    if isinstance(university_data, dict):
+        try:
+            university_data = UniversityData(**university_data)
+        except Exception:
+            pass
+
+    student_json = student_data.model_dump_json(indent=2) if hasattr(student_data, "model_dump_json") else json.dumps(student_data or {}, indent=2)
+    univ_json = university_data.model_dump_json(indent=2) if hasattr(university_data, "model_dump_json") else json.dumps(university_data or {}, indent=2)
+
     human_content = FINAL_EVALUATION_HUMAN_PROMPT.format(
-        student_info=student_data.model_dump_json(indent=2) if student_data else "{}",
-        university_info=university_data.model_dump_json(indent=2) if university_data else "{}",
+        student_info=student_json,
+        university_info=univ_json,
         turn_evaluations=eval_summary,
         transcript=full_transcript,
     )

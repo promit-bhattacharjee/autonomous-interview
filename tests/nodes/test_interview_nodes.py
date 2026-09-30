@@ -125,6 +125,42 @@ class TestGenerateQuestionsNode(unittest.TestCase):
         self.assertEqual(len(output["topics"]), 1)
         self.assertEqual(output["difficulty"], "Easy")
 
+    @patch("interview.nodes.get_structured_thinking_llm")
+    def test_generate_questions_with_dict_data(self, mock_get_llm):
+        """Generates questions safely when student_data and university_data are raw dicts."""
+        mock_plan = QuestionPlanModel(
+            topics=[
+                TopicItem(
+                    id=1,
+                    name="Academic Fit",
+                    questions=[QuestionItem(question="Why Herts?", expected_answer_keywords=["Herts"])],
+                )
+            ],
+            expected_total_time_to_ans=45,
+            difficulty="Medium",
+        )
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_plan
+        mock_get_llm.return_value = mock_llm
+
+        state: InterviewState = {
+            "student_data": {
+                "student_id": "STU-001",
+                "full_name": "Dict Student",
+                "target_university": "University of Hertfordshire",
+                "target_course": "MSc Computer Science",
+            },
+            "university_data": {
+                "university_id": "HERTS-01",
+                "official_name": "University of Hertfordshire",
+                "target_course": "MSc Computer Science",
+                "core_modules": [{"title": "Software Engineering"}],
+            },
+            "difficulty": "Medium",
+        }
+        output = generate_questions_node(state)
+        self.assertEqual(len(output["topics"]), 1)
+
 
 class TestEvaluateAnswerNode(unittest.TestCase):
     """Unit tests for evaluate_answer_node (Node 2)."""
@@ -576,6 +612,31 @@ class TestGenerateFinalEvaluationNode(unittest.TestCase):
         self.assertEqual(report.overall_status, "PASSED")
         self.assertEqual(len(report.topic_breakdown), 1)
         self.assertEqual(report.strengths, ["Detailed knowledge of course modules"])
+
+    @patch("interview.nodes.get_structured_thinking_llm")
+    def test_generate_final_evaluation_with_dict_student_and_univ_data(self, mock_get_llm):
+        """Synthesizes final report safely when student_data and university_data are raw dicts."""
+        expected_report = FinalEvaluation(
+            overall_score=90.0,
+            overall_status="PASSED",
+            topic_breakdown=[],
+            strengths=["Consistent answers"],
+            areas_for_improvement=[],
+            recommendation="Genuine",
+        )
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = expected_report
+        mock_get_llm.return_value = mock_llm
+
+        state: InterviewState = {
+            "student_data": {"student_id": "STU-02", "full_name": "Dict Alex"},
+            "university_data": {"university_id": "HERTS-02", "official_name": "Herts"},
+            "messages": [AIMessage(content="Why?"), HumanMessage(content="Because.")],
+            "evaluations": [],
+        }
+        result = generate_final_evaluation_node(state)
+        self.assertEqual(result.get("interview_status"), "completed")
+        self.assertEqual(result.get("final_evaluation").overall_score, 90.0)
 
 
 if __name__ == "__main__":
