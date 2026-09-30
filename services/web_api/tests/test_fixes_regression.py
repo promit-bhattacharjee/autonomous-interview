@@ -247,3 +247,119 @@ class TestFixesRegression:
                 app.dependency_overrides[get_db] = prior_override
             else:
                 app.dependency_overrides.pop(get_db, None)
+
+    def test_record_completed_session_idempotent_turns(self, db_session):
+        """Validates that completing a session multiple times does not duplicate turn evaluations."""
+        from src.api.db.models import InterviewSessionRecord, StudentProfile, TurnEvaluationRecord
+        admin = User(username="admin_idem", email="idem@test.com", hashed_password="pw", role=UserRole.ADMIN)
+        student = User(username="stud_idem", email="s_idem@test.com", hashed_password="pw", role=UserRole.STUDENT)
+        db_session.add_all([admin, student])
+        db_session.commit()
+
+        sp = StudentProfile(user_id=student.id, full_name="Student Idem")
+        bank = QuestionBank(title="Bank Idem")
+        db_session.add_all([sp, bank])
+        db_session.commit()
+
+        sess = InterviewSessionRecord(
+            student_id=sp.id,
+            bank_id=bank.id,
+            room_name="room-stud_idem",
+            status="in_progress",
+        )
+        db_session.add(sess)
+        db_session.commit()
+
+        sample_turns = [
+            {"turn_type": "question", "reference_id": "q1", "spoken_prompt": "Q1", "candidate_transcript": "A1", "score": 80.0},
+            {"turn_type": "followup", "reference_id": "f1", "spoken_prompt": "F1", "candidate_transcript": "A2", "score": 85.0},
+        ]
+
+        # Call completion first time
+        question_service.record_completed_session(
+            db=db_session,
+            session_id=sess.id,
+            overall_score=82.5,
+            ukvi_recommendation="Genuine",
+            report_data={"summary": "Pass"},
+            turns_data=sample_turns,
+        )
+        turns_count_1 = db_session.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == sess.id).count()
+        assert turns_count_1 == 2
+
+        # Call completion second time (retry scenario)
+        question_service.record_completed_session(
+            db=db_session,
+            session_id=sess.id,
+            overall_score=82.5,
+            ukvi_recommendation="Genuine",
+            report_data={"summary": "Pass"},
+            turns_data=sample_turns,
+        )
+        turns_count_2 = db_session.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == sess.id).count()
+        assert turns_count_2 == 2  # Idempotent: exactly 2, not 4
+
+    def test_abort_and_discard_session_sets_concluded_at(self, db_session):
+        """Validates that abort_and_discard_session records concluded_at timestamp."""
+        from src.api.db.models import InterviewSessionRecord, StudentProfile
+        student = User(username="stud_disc", email="s_disc@test.com", hashed_password="pw", role=UserRole.STUDENT)
+        db_session.add(student)
+        db_session.commit()
+
+        sp = StudentProfile(user_id=student.id, full_name="Student Discard")
+        bank = QuestionBank(title="Bank Discard")
+        db_session.add_all([sp, bank])
+        db_session.commit()
+
+        sess = InterviewSessionRecord(
+            student_id=sp.id,
+            bank_id=bank.id,
+            room_name="room-stud_disc",
+            status="in_progress",
+        )
+        db_session.add(sess)
+        db_session.commit()
+
+        assert sess.concluded_at is None
+        abort_and_discard_session(db=db_session, session_id=sess.id, reason="Lost connection")
+        db_session.refresh(sess)
+        assert sess.status == "discarded"
+        assert sess.concluded_at is not None
+
+    def test_toggle_bank_status_prevents_open_redirect(self, db_session):
+        """Validates that toggle_bank_status rejects external Referer headers to prevent open redirects."""
+        from fastapi.testclient import TestClient
+        from src.api.main import app
+        from src.api.db.session import get_db
+        from src.api.security.auth import create_access_token
+
+        def override_db():
+            yield db_session
+
+        prior_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app)
+            admin = User(username="admin_redir", email="redir@test.com", hashed_password="pw", role=UserRole.ADMIN, active_device_id="dev-redir")
+            bank = QuestionBank(title="Bank Redir", is_active=True)
+            db_session.add_all([admin, bank])
+            db_session.commit()
+
+            admin_token = create_access_token(user_id=admin.id, role="admin", device_id="dev-redir")
+            client.cookies.set("access_token", admin_token)
+
+            # Malicious external Referer
+            res = client.post(
+                f"/admin/banks/{bank.id}/toggle-active",
+                data={"is_active": "false"},
+                headers={"Referer": "https://attacker.evil.com/phishing"},
+                follow_redirects=False,
+            )
+            assert res.status_code == 303
+            # Must redirect safely to internal bank URL, NOT attacker site
+            assert res.headers["location"] == f"/admin/banks/{bank.id}"
+        finally:
+            if prior_override is not None:
+                app.dependency_overrides[get_db] = prior_override
+            else:
+                app.dependency_overrides.pop(get_db, None)

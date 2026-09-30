@@ -39,7 +39,9 @@ def abort_and_discard_session(
             if session:
                 # Purge partial turn evaluation records
                 db.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == session.id).delete()
+                from datetime import datetime, timezone
                 session.status = "discarded"
+                session.concluded_at = datetime.now(timezone.utc)
                 session.report_json = json.dumps({"discard_reason": reason})
                 db.commit()
                 return {"status": "discarded", "session_id": session.id, "reason": reason}

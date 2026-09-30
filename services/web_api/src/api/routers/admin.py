@@ -318,7 +318,12 @@ def toggle_bank_status(
 ):
     question_service.toggle_bank_active(db, bank_id=bank_id, is_active=is_active)
     referer = request.headers.get("referer", "")
-    target_url = referer if referer else f"/admin/banks/{bank_id}"
+    target_url = f"/admin/banks/{bank_id}"
+    if referer:
+        if referer.startswith("/") and not referer.startswith("//"):
+            target_url = referer
+        elif request.url.netloc in referer:
+            target_url = referer
     return RedirectResponse(url=target_url, status_code=status.HTTP_303_SEE_OTHER)
 
 

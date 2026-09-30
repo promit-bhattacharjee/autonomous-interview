@@ -18,6 +18,7 @@ DEFAULT_UK_VOICE = "en-GB-SoniaNeural"
 
 
 @router.get("/tts")
+@router.get("/api/tts")
 async def generate_speech_audio(
     text: str = Query(..., min_length=1, max_length=1500, description="Text prompt to synthesize"),
     voice: Optional[str] = Query(None, description="Neural voice identifier (defaults to en-GB-SoniaNeural)"),

@@ -314,6 +314,7 @@ def record_completed_session(
     session.concluded_at = datetime.now(timezone.utc)
 
     if turns_data:
+        db.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == session.id).delete()
         for t in turns_data:
             turn_record = TurnEvaluationRecord(
                 session_id=session.id,
