@@ -363,3 +363,81 @@ class TestFixesRegression:
                 app.dependency_overrides[get_db] = prior_override
             else:
                 app.dependency_overrides.pop(get_db, None)
+
+    def test_assign_bank_to_student_sanitizes_blank_student_id(self, db_session):
+        """Validates that assigning bank with an empty string student_id is sanitized to None (global assignment)."""
+        bank = QuestionBank(title="Bank Global")
+        db_session.add(bank)
+        db_session.commit()
+
+        assignment = question_service.assign_bank_to_student(db_session, bank_id=bank.id, student_id="   ")
+        assert assignment.student_id is None
+        assert assignment.bank_id == bank.id
+
+    def test_student_results_and_admin_detail_render_robustly(self, db_session):
+        """Validates that student results and admin detail render cleanly when turns have None scores or discarded status."""
+        from fastapi.testclient import TestClient
+        from src.api.main import app
+        from src.api.db.session import get_db
+        from src.api.security.auth import create_access_token
+        from src.api.db.models import InterviewSessionRecord, StudentProfile, TurnEvaluationRecord
+
+        def override_db():
+            yield db_session
+
+        prior_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app)
+            student = User(username="stud_robust", email="robust@test.com", hashed_password="pw", role=UserRole.STUDENT, active_device_id="dev-robust")
+            admin = User(username="admin_robust", email="adm_robust@test.com", hashed_password="pw", role=UserRole.ADMIN, active_device_id="dev-adm-robust")
+            db_session.add_all([student, admin])
+            db_session.commit()
+
+            sp = StudentProfile(user_id=student.id, full_name="Student Robust")
+            bank = QuestionBank(title="Bank Robust")
+            db_session.add_all([sp, bank])
+            db_session.commit()
+
+            sess = InterviewSessionRecord(
+                student_id=sp.id,
+                bank_id=bank.id,
+                room_name="room-stud_robust",
+                status="completed",
+                overall_score=78.5,
+                ukvi_recommendation="Genuine",
+            )
+            db_session.add(sess)
+            db_session.commit()
+
+            # Add turn with score=None
+            turn = TurnEvaluationRecord(
+                session_id=sess.id,
+                turn_type="question",
+                reference_id="q-1",
+                spoken_prompt="Why study in the UK?",
+                candidate_transcript="I want quality education.",
+                score=None,
+            )
+            db_session.add(turn)
+            db_session.commit()
+
+            # Verify student results page does not throw TypeError on None score
+            stud_token = create_access_token(user_id=student.id, role="student", device_id="dev-robust")
+            client.cookies.set("access_token", stud_token)
+            res_stud = client.get(f"/student/results/{sess.id}")
+            assert res_stud.status_code == 200
+            assert "Official UKVI Credibility Report" in res_stud.text
+
+            # Verify admin evaluation detail page also renders cleanly
+            adm_token = create_access_token(user_id=admin.id, role="admin", device_id="dev-adm-robust")
+            client.cookies.set("access_token", adm_token)
+            res_adm = client.get(f"/admin/evaluations/{sess.id}")
+            assert res_adm.status_code == 200
+            assert "Candidate Credibility Evaluation" in res_adm.text
+        finally:
+            if prior_override is not None:
+                app.dependency_overrides[get_db] = prior_override
+            else:
+                app.dependency_overrides.pop(get_db, None)
+

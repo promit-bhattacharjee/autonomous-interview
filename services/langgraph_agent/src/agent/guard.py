@@ -18,6 +18,15 @@ def abort_and_discard_session(
     """
     logger.warning("Aborting session %s: %s", session_id, reason)
 
+    db_to_close = None
+    if db is None:
+        try:
+            from src.agent.tools.relational_fetchers import _get_db_session_if_available
+            db = _get_db_session_if_available()
+            db_to_close = db
+        except Exception:
+            db = None
+
     if db:
         try:
             from src.api.db.models import InterviewSessionRecord, TurnEvaluationRecord
@@ -40,13 +49,22 @@ def abort_and_discard_session(
                 # Purge partial turn evaluation records
                 db.query(TurnEvaluationRecord).filter(TurnEvaluationRecord.session_id == session.id).delete()
                 from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
                 session.status = "discarded"
-                session.concluded_at = datetime.now(timezone.utc)
-                session.report_json = json.dumps({"discard_reason": reason})
+                session.concluded_at = now
+                session.report_json = json.dumps({
+                    "status": "discarded",
+                    "discard_reason": reason,
+                    "reason": reason,
+                    "discarded_at": now.isoformat(),
+                })
                 db.commit()
                 return {"status": "discarded", "session_id": session.id, "reason": reason}
         except Exception as exc:
             logger.error("Failed to discard session in database: %s", exc)
+        finally:
+            if db_to_close:
+                db_to_close.close()
 
     # Fallback to API service endpoint
     import os

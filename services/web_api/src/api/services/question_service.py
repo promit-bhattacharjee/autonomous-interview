@@ -133,6 +133,9 @@ def assign_bank_to_student(
     If student_id already has an assignment, any previous direct assignment is deleted,
     guaranteeing at most 1 active bank per candidate.
     """
+    if student_id is not None:
+        student_id = student_id.strip() or None
+
     if student_id:
         # Auto-deactivate prior assignments
         db.query(QuestionAssignment).filter(QuestionAssignment.student_id == student_id).delete()

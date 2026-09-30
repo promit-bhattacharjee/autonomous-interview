@@ -51,6 +51,8 @@
                         <p class="text-light mb-0">
                             {% if report and report.recommendation %}
                                 {{ report.recommendation }}
+                            {% elif report and (report.discard_reason or report.reason) %}
+                                Discard Reason: <em>{{ report.discard_reason or report.reason }}</em>
                             {% else %}
                                 The candidate underwent multi-topic questioning covering Academic Alignment, Financial Longevity, and Career Trajectory.
                             {% endif %}
@@ -158,8 +160,8 @@
                                         <td class="small">{{ turn.spoken_prompt }}</td>
                                         <td class="small text-secondary fst-italic">{{ turn.candidate_transcript or '(No audible response)' }}</td>
                                         <td class="text-end">
-                                            <span class="badge {% if turn.score >= 70 %}bg-success{% elif turn.score >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
-                                                {{ "%.1f"|format(turn.score) }}%
+                                            <span class="badge {% if (turn.score or 0) >= 70 %}bg-success{% elif (turn.score or 0) >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
+                                                {{ "%.1f"|format(turn.score or 0.0) }}%
                                             </span>
                                         </td>
                                     </tr>

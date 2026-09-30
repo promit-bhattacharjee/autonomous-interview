@@ -48,8 +48,8 @@
                     <p class="text-light mb-0">
                         {% if report and report.recommendation %}
                             {{ report.recommendation }}
-                        {% elif report and report.discard_reason %}
-                            Discard Reason: <em>{{ report.discard_reason }}</em>
+                        {% elif report and (report.discard_reason or report.reason) %}
+                            Discard Reason: <em>{{ report.discard_reason or report.reason }}</em>
                         {% else %}
                             Multi-topic viva credibility evaluation covering Academic Alignment, Financial Longevity, and Career Trajectory.
                         {% endif %}

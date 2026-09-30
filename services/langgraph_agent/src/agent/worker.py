@@ -252,19 +252,52 @@ async def entrypoint(ctx: JobContext):
                     "final_evaluation": final_eval,
                 })
 
-                # Persist to database via HTTP
+                # Persist to database via HTTP with direct DB fallback
                 api_url = os.getenv("API_SERVICE_URL", "http://localhost:8000")
+                persisted = False
                 try:
                     import httpx
                     async with httpx.AsyncClient(base_url=api_url, timeout=10.0) as client:
-                        await client.post(f"/api/sessions/{session_id}/complete", json={
+                        resp = await client.post(f"/api/sessions/{session_id}/complete", json={
                             "overall_score": overall_score,
                             "ukvi_recommendation": rec,
                             "report_data": final_eval,
                             "turns_data": turns,
                         })
+                        if resp.status_code == 200:
+                            persisted = True
                 except Exception as exc:
                     logger.warning("Failed to persist session completion via API: %s", exc)
+
+                if not persisted:
+                    db = _get_db_session_if_available()
+                    if db:
+                        try:
+                            from src.api.services import question_service as direct_qs
+                            from src.api.db.models import InterviewSessionRecord
+                            sess_record = (
+                                db.query(InterviewSessionRecord)
+                                .filter(
+                                    (InterviewSessionRecord.id == session_id)
+                                    | (InterviewSessionRecord.room_name == session_id)
+                                    | (InterviewSessionRecord.room_name == f"room-{session_id}")
+                                )
+                                .first()
+                            )
+                            if sess_record:
+                                direct_qs.record_completed_session(
+                                    db=db,
+                                    session_id=sess_record.id,
+                                    overall_score=overall_score,
+                                    ukvi_recommendation=rec,
+                                    report_data=final_eval,
+                                    turns_data=turns,
+                                )
+                                logger.info("Session %s completed via direct DB persistence fallback.", session_id)
+                        except Exception as db_exc:
+                            logger.warning("Direct DB persistence fallback failed: %s", db_exc)
+                        finally:
+                            db.close()
 
                 await asyncio.sleep(2.0)
                 session_ended.set()

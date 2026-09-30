@@ -42,7 +42,7 @@
                                 </td>
                                 <td>
                                     <span class="small">{{ s.question_bank.title if s.question_bank else 'N/A' }}</span>
-                                    <div><span class="badge bg-secondary">{{ s.question_bank.difficulty.value if s.question_bank else '' }}</span></div>
+                                    <div><span class="badge bg-secondary">{{ s.question_bank.difficulty.value if (s.question_bank and s.question_bank.difficulty.value is defined) else (s.question_bank.difficulty if s.question_bank else '') }}</span></div>
                                 </td>
                                 <td>
                                     {% if s.overall_score is not none %}
