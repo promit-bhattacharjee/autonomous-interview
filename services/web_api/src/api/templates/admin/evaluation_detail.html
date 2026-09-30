@@ -165,7 +165,21 @@
                                         </span>
                                     </td>
                                     <td class="small">{{ turn.spoken_prompt }}</td>
-                                    <td class="small text-secondary fst-italic">{{ turn.candidate_transcript or '(No audible response)' }}</td>
+                                    <td class="small">
+                                        <div class="text-secondary fst-italic mb-1">{{ turn.candidate_transcript or '(No audible response)' }}</div>
+                                        {% if turn.rubric_hits_json and turn.rubric_hits_json != '[]' %}
+                                            <div class="mt-1">
+                                                <span class="text-success small fw-semibold me-1">✓ Matched:</span>
+                                                <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 small">{{ turn.rubric_hits_json|replace('"', '')|replace('[', '')|replace(']', '') }}</span>
+                                            </div>
+                                        {% endif %}
+                                        {% if turn.missed_keywords_json and turn.missed_keywords_json != '[]' %}
+                                            <div class="mt-1">
+                                                <span class="text-danger small fw-semibold me-1">✗ Missed:</span>
+                                                <span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-50 small">{{ turn.missed_keywords_json|replace('"', '')|replace('[', '')|replace(']', '') }}</span>
+                                            </div>
+                                        {% endif %}
+                                    </td>
                                     <td class="text-end">
                                         <span class="badge {% if (turn.score or 0) >= 70 %}bg-success{% elif (turn.score or 0) >= 50 %}bg-warning text-dark{% else %}bg-danger{% endif %} fs-6">
                                             {{ "%.1f"|format(turn.score or 0.0) }}%

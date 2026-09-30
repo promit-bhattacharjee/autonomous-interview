@@ -3,31 +3,35 @@
 {% block title %}Login - UKVI Credibility Interviewer{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-5">
-        <div class="card p-4 shadow-sm">
-            <h3 class="card-title text-center mb-4">Account Login</h3>
+<div class="row justify-content-center my-4">
+    <div class="col-md-6 col-lg-5 col-xl-4">
+        <div class="card p-4 shadow-lg border-primary border-opacity-25">
+            <div class="text-center mb-4">
+                <span class="fs-1 mb-2 d-block">🇬🇧</span>
+                <h3 class="card-title fw-bold text-light mb-1">Account Login</h3>
+                <p class="text-secondary small mb-0">Sign in to your candidate or officer account</p>
+            </div>
             {% if error %}
-                <div class="alert alert-danger" role="alert">{{ error }}</div>
+                <div class="alert alert-danger py-2 small border-0" role="alert">⚠️ {{ error }}</div>
             {% endif %}
             <form action="/auth/login" method="POST" id="loginForm">
                 <div class="mb-3">
-                    <label for="username" class="form-label">Username or Email</label>
-                    <input type="text" class="form-control" id="username" name="username" required>
+                    <label for="username" class="form-label small fw-semibold text-light">Username or Email</label>
+                    <input type="text" class="form-control" id="username" name="username" placeholder="e.g. candidate2026 or email" required autofocus>
                 </div>
                 <div class="mb-3">
-                    <label for="password" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
+                    <label for="password" class="form-label small fw-semibold text-light">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="••••••••" required>
                 </div>
                 <!-- Hidden device_id injected from localStorage -->
                 <input type="hidden" id="device_id" name="device_id">
-                <button type="submit" class="btn btn-primary w-100 py-2">Sign In</button>
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">Sign In ➔</button>
             </form>
             <div class="text-center mt-3 small text-secondary">
-                Don't have an account? <a href="/auth/register" class="text-primary">Register as a Student</a>
+                New candidate? <a href="/auth/register" class="text-info text-decoration-none fw-semibold">Register for CAS Viva</a>
             </div>
-            <div class="alert alert-info mt-3 p-2 small">
-                🔒 <strong>Single-Device Security:</strong> Logging in from a new browser or device will automatically terminate prior active sessions.
+            <div class="alert alert-dark border border-secondary border-opacity-50 mt-3 p-2 small mb-0">
+                🔒 <strong>Single-Device Security:</strong> Active sessions are bound to your hardware browser to prevent unauthorized sharing.
             </div>
         </div>
     </div>
